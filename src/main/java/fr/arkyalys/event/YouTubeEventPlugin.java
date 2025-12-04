@@ -2,10 +2,12 @@ package fr.arkyalys.event;
 
 import fr.arkyalys.event.api.YouTubeEventAPI;
 import fr.arkyalys.event.api.events.YouTubeConnectionEvent;
+import fr.arkyalys.event.commands.EventCommand;
 import fr.arkyalys.event.commands.YouTubeCommand;
 import fr.arkyalys.event.config.ConfigManager;
 import fr.arkyalys.event.display.YouTubeDisplay;
 import fr.arkyalys.event.events.EventManager;
+import fr.arkyalys.event.game.GameManager;
 import fr.arkyalys.event.youtube.YouTubeAPI;
 import fr.arkyalys.event.youtube.LiveChatPoller;
 import fr.arkyalys.event.youtube.LiveAutoDetector;
@@ -26,6 +28,7 @@ public class YouTubeEventPlugin extends JavaPlugin {
     private LiveAutoDetector autoDetector;
     private LikeTracker likeTracker;
     private EventManager eventManager;
+    private GameManager gameManager;
     private YouTubeDisplay display;
 
     // Le joueur cible des événements (le streamer)
@@ -52,9 +55,14 @@ public class YouTubeEventPlugin extends JavaPlugin {
         this.likeTracker = new LikeTracker(this);
         this.display = new YouTubeDisplay(this);
 
+        // Initialiser le gestionnaire de jeux
+        this.gameManager = new GameManager(this);
+
         // Enregistrer les commandes
         getCommand("youtube").setExecutor(new YouTubeCommand(this));
         getCommand("yt").setExecutor(new YouTubeCommand(this));
+        getCommand("event").setExecutor(new EventCommand(this));
+        getCommand("event").setTabCompleter(new EventCommand(this));
 
         // Initialiser l'API publique
         YouTubeEventAPI.init(this);
@@ -107,6 +115,7 @@ public class YouTubeEventPlugin extends JavaPlugin {
         reloadConfig();
         configManager.reload();
         eventManager.reload();
+        gameManager.reload();
 
         // Reconfigurer les préférences de provider
         youtubeAPI.setPreferInnerTube(configManager.isPreferInnerTube());
@@ -234,6 +243,10 @@ public class YouTubeEventPlugin extends JavaPlugin {
 
     public EventManager getEventManager() {
         return eventManager;
+    }
+
+    public GameManager getGameManager() {
+        return gameManager;
     }
 
     public YouTubeDisplay getDisplay() {

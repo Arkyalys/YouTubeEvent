@@ -1,0 +1,342 @@
+package fr.arkyalys.event.commands;
+
+import fr.arkyalys.event.YouTubeEventPlugin;
+import fr.arkyalys.event.game.GameEvent;
+import fr.arkyalys.event.game.GameManager;
+import fr.arkyalys.event.game.GameState;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * Commandes pour le système d'events
+ */
+public class EventCommand implements CommandExecutor, TabCompleter {
+
+    private final YouTubeEventPlugin plugin;
+    private final String prefix;
+
+    public EventCommand(YouTubeEventPlugin plugin) {
+        this.plugin = plugin;
+        this.prefix = plugin.getConfigManager().getPrefix();
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length == 0) {
+            sendHelp(sender);
+            return true;
+        }
+
+        String subCommand = args[0].toLowerCase();
+
+        switch (subCommand) {
+            case "start" -> handleStart(sender, args);
+            case "begin" -> handleBegin(sender);
+            case "stop" -> handleStop(sender);
+            case "list" -> handleList(sender);
+            case "join" -> handleJoin(sender);
+            case "leave" -> handleLeave(sender);
+            case "setspawn" -> handleSetSpawn(sender, args);
+            case "status" -> handleStatus(sender);
+            case "reload" -> handleReload(sender);
+            case "help" -> sendHelp(sender);
+            default -> {
+                sender.sendMessage((prefix + "&cCommande inconnue. Utilisez /event help").replace("&", "§"));
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * /event start <event>
+     */
+    private void handleStart(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        if (args.length < 2) {
+            sender.sendMessage((prefix + "&cUtilisation: /event start <nom_event>").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Events disponibles: " + getGameNames()).replace("&", "§"));
+            return;
+        }
+
+        GameManager gameManager = plugin.getGameManager();
+
+        if (gameManager.hasActiveGame()) {
+            sender.sendMessage((prefix + "&cUn event est déjà en cours! Utilisez /event stop d'abord.").replace("&", "§"));
+            return;
+        }
+
+        String gameName = args[1].toLowerCase();
+        GameEvent game = gameManager.getGame(gameName);
+
+        if (game == null) {
+            sender.sendMessage((prefix + "&cEvent inconnu: " + gameName).replace("&", "§"));
+            sender.sendMessage((prefix + "&7Events disponibles: " + getGameNames()).replace("&", "§"));
+            return;
+        }
+
+        if (gameManager.startGame(gameName)) {
+            sender.sendMessage((prefix + "&aEvent &6" + game.getDisplayName() + " &aouvert!").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Utilisez &f/event begin &7pour lancer le jeu.").replace("&", "§"));
+        } else {
+            sender.sendMessage((prefix + "&cImpossible d'ouvrir l'event. Vérifiez que le monde existe.").replace("&", "§"));
+        }
+    }
+
+    /**
+     * /event begin
+     */
+    private void handleBegin(CommandSender sender) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        GameManager gameManager = plugin.getGameManager();
+        GameEvent game = gameManager.getCurrentGame();
+
+        if (game == null || game.getState() != GameState.OPEN) {
+            sender.sendMessage((prefix + "&cAucun event n'est ouvert! Utilisez /event start <event>").replace("&", "§"));
+            return;
+        }
+
+        if (game.getParticipantCount() < game.getMinPlayers()) {
+            sender.sendMessage((prefix + "&cPas assez de joueurs! Minimum: " + game.getMinPlayers() +
+                    " (actuellement: " + game.getParticipantCount() + ")").replace("&", "§"));
+            return;
+        }
+
+        if (gameManager.beginGame()) {
+            sender.sendMessage((prefix + "&aEvent &6" + game.getDisplayName() + " &alancé!").replace("&", "§"));
+        } else {
+            sender.sendMessage((prefix + "&cImpossible de lancer l'event.").replace("&", "§"));
+        }
+    }
+
+    /**
+     * /event stop
+     */
+    private void handleStop(CommandSender sender) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        GameManager gameManager = plugin.getGameManager();
+
+        if (!gameManager.hasActiveGame()) {
+            sender.sendMessage((prefix + "&cAucun event en cours.").replace("&", "§"));
+            return;
+        }
+
+        gameManager.stopGame();
+        sender.sendMessage((prefix + "&cEvent arrêté.").replace("&", "§"));
+    }
+
+    /**
+     * /event list
+     */
+    private void handleList(CommandSender sender) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        sender.sendMessage("&6========== &eEvents Disponibles &6==========".replace("&", "§"));
+
+        for (GameEvent game : plugin.getGameManager().getGames()) {
+            String status = getStatusColor(game.getState());
+            sender.sendMessage(("&7- &f" + game.getName() + " &7(" + game.getDisplayName() + "&7) " + status).replace("&", "§"));
+        }
+
+        sender.sendMessage("&6==========================================".replace("&", "§"));
+    }
+
+    private String getStatusColor(GameState state) {
+        return switch (state) {
+            case WAITING -> "&8[INACTIF]";
+            case OPEN -> "&a[OUVERT]";
+            case RUNNING -> "&c[EN COURS]";
+            case ENDED -> "&e[TERMINÉ]";
+        };
+    }
+
+    /**
+     * /event join
+     */
+    private void handleJoin(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage((prefix + "&cCette commande doit être exécutée par un joueur.").replace("&", "§"));
+            return;
+        }
+
+        GameManager gameManager = plugin.getGameManager();
+        GameEvent game = gameManager.getCurrentGame();
+
+        if (game == null || game.getState() != GameState.OPEN) {
+            player.sendMessage((prefix + "&cAucun event n'est ouvert pour le moment.").replace("&", "§"));
+            return;
+        }
+
+        gameManager.joinGame(player);
+    }
+
+    /**
+     * /event leave
+     */
+    private void handleLeave(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage((prefix + "&cCette commande doit être exécutée par un joueur.").replace("&", "§"));
+            return;
+        }
+
+        GameManager gameManager = plugin.getGameManager();
+        GameEvent game = gameManager.getCurrentGame();
+
+        if (game == null) {
+            player.sendMessage((prefix + "&cVous ne participez à aucun event.").replace("&", "§"));
+            return;
+        }
+
+        if (!game.isParticipant(player)) {
+            player.sendMessage((prefix + "&cVous ne participez pas à cet event.").replace("&", "§"));
+            return;
+        }
+
+        gameManager.leaveGame(player);
+    }
+
+    /**
+     * /event setspawn <event>
+     */
+    private void handleSetSpawn(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage((prefix + "&cCette commande doit être exécutée par un joueur.").replace("&", "§"));
+            return;
+        }
+
+        if (args.length < 2) {
+            sender.sendMessage((prefix + "&cUtilisation: /event setspawn <nom_event>").replace("&", "§"));
+            return;
+        }
+
+        String gameName = args[1].toLowerCase();
+        GameEvent game = plugin.getGameManager().getGame(gameName);
+
+        if (game == null) {
+            sender.sendMessage((prefix + "&cEvent inconnu: " + gameName).replace("&", "§"));
+            return;
+        }
+
+        game.setSpawn(player.getLocation());
+        sender.sendMessage((prefix + "&aSpawn de l'event &6" + game.getDisplayName() +
+                " &adéfini à votre position!").replace("&", "§"));
+    }
+
+    /**
+     * /event status
+     */
+    private void handleStatus(CommandSender sender) {
+        GameManager gameManager = plugin.getGameManager();
+        GameEvent game = gameManager.getCurrentGame();
+
+        sender.sendMessage("&6========== &eStatut Event &6==========".replace("&", "§"));
+
+        if (game == null || game.getState() == GameState.WAITING) {
+            sender.sendMessage("&7Aucun event en cours.".replace("&", "§"));
+        } else {
+            sender.sendMessage(("&7Event: &f" + game.getDisplayName()).replace("&", "§"));
+            sender.sendMessage(("&7État: " + getStatusColor(game.getState())).replace("&", "§"));
+            sender.sendMessage(("&7Participants: &f" + game.getParticipantCount() + "/" + game.getMaxPlayers()).replace("&", "§"));
+            sender.sendMessage(("&7Monde: &f" + game.getWorldName()).replace("&", "§"));
+        }
+
+        // Info YouTube
+        if (plugin.isConnected()) {
+            sender.sendMessage("&7Live YouTube: &aConnecté".replace("&", "§"));
+        } else {
+            sender.sendMessage("&7Live YouTube: &cDéconnecté".replace("&", "§"));
+        }
+
+        sender.sendMessage("&6====================================".replace("&", "§"));
+    }
+
+    /**
+     * /event reload
+     */
+    private void handleReload(CommandSender sender) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        plugin.getGameManager().reload();
+        sender.sendMessage((prefix + "&aConfiguration des events rechargée!").replace("&", "§"));
+    }
+
+    private void sendHelp(CommandSender sender) {
+        sender.sendMessage("&6========== &eCommandes Event &6==========".replace("&", "§"));
+        sender.sendMessage("&e/event start <event> &7- Ouvrir un event".replace("&", "§"));
+        sender.sendMessage("&e/event begin &7- Lancer l'event".replace("&", "§"));
+        sender.sendMessage("&e/event stop &7- Arrêter l'event".replace("&", "§"));
+        sender.sendMessage("&e/event list &7- Liste des events".replace("&", "§"));
+        sender.sendMessage("&e/event join &7- Rejoindre l'event".replace("&", "§"));
+        sender.sendMessage("&e/event leave &7- Quitter l'event".replace("&", "§"));
+        sender.sendMessage("&e/event setspawn <event> &7- Définir le spawn".replace("&", "§"));
+        sender.sendMessage("&e/event status &7- Voir le statut".replace("&", "§"));
+        sender.sendMessage("&e/event reload &7- Recharger les configs".replace("&", "§"));
+        sender.sendMessage("&6========================================".replace("&", "§"));
+    }
+
+    private boolean hasPermission(CommandSender sender, String permission) {
+        if (!sender.hasPermission(permission)) {
+            sender.sendMessage((prefix + "&cVous n'avez pas la permission.").replace("&", "§"));
+            return false;
+        }
+        return true;
+    }
+
+    private String getGameNames() {
+        StringBuilder sb = new StringBuilder();
+        for (GameEvent game : plugin.getGameManager().getGames()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(game.getName());
+        }
+        return sb.toString();
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        List<String> completions = new ArrayList<>();
+
+        if (args.length == 1) {
+            List<String> subCommands = new ArrayList<>();
+
+            // Commandes admin
+            if (sender.hasPermission("youtubeevent.event.admin")) {
+                subCommands.addAll(Arrays.asList("start", "begin", "stop", "list", "setspawn", "reload"));
+            }
+
+            // Commandes joueur
+            subCommands.addAll(Arrays.asList("join", "leave", "status", "help"));
+
+            String current = args[0].toLowerCase();
+            for (String cmd : subCommands) {
+                if (cmd.startsWith(current)) {
+                    completions.add(cmd);
+                }
+            }
+        } else if (args.length == 2) {
+            String subCommand = args[0].toLowerCase();
+
+            if (subCommand.equals("start") || subCommand.equals("setspawn")) {
+                String current = args[1].toLowerCase();
+                for (GameEvent game : plugin.getGameManager().getGames()) {
+                    if (game.getName().startsWith(current)) {
+                        completions.add(game.getName());
+                    }
+                }
+            }
+        }
+
+        return completions;
+    }
+}

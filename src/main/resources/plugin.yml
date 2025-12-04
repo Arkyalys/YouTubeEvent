@@ -5,6 +5,8 @@ api-version: "1.21"
 author: Arkyalys
 description: Connecte YouTube Live a Minecraft pour declencher des evenements in-game
 
+softdepend: [Multiverse-Core]
+
 commands:
   youtube:
     description: Commande principale du plugin YouTubeEvent
@@ -12,10 +14,21 @@ commands:
     aliases: [yt, ytevent]
     permission: youtubeevent.admin
 
+  event:
+    description: Commandes pour les events de jeu
+    usage: /<command> <start|begin|stop|join|leave|list|setspawn|status>
+    aliases: [ev, events]
+
 permissions:
   youtubeevent.admin:
     description: Acces a toutes les commandes YouTubeEvent
     default: op
   youtubeevent.use:
     description: Commandes de base (status)
+    default: true
+  youtubeevent.event.admin:
+    description: Gestion des events (start, stop, begin, list, setspawn)
+    default: op
+  youtubeevent.event.join:
+    description: Rejoindre et quitter les events
     default: true

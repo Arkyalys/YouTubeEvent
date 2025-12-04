@@ -65,6 +65,11 @@ public class EventManager {
             return;
         }
 
+        // Transmettre au GameManager pour les events de jeu
+        if (plugin.getGameManager() != null) {
+            plugin.getGameManager().handleYouTubeMessage(message);
+        }
+
         Player target = plugin.getTargetPlayer();
         if (target == null || !target.isOnline()) {
             return; // Pas de joueur cible
@@ -172,6 +177,11 @@ public class EventManager {
         Bukkit.getPluginManager().callEvent(likeEvent);
         if (likeEvent.isCancelled()) return;
 
+        // Transmettre au GameManager pour les events de jeu
+        if (plugin.getGameManager() != null) {
+            plugin.getGameManager().handleYouTubeLike(newLikes, totalLikes);
+        }
+
         Player target = plugin.getTargetPlayer();
         if (target == null || !target.isOnline()) return;
 
@@ -204,6 +214,11 @@ public class EventManager {
         YouTubeViewMilestoneEvent viewEvent = new YouTubeViewMilestoneEvent(liveId, viewCount, milestone);
         Bukkit.getPluginManager().callEvent(viewEvent);
         if (viewEvent.isCancelled()) return;
+
+        // Transmettre au GameManager pour les events de jeu
+        if (plugin.getGameManager() != null) {
+            plugin.getGameManager().handleYouTubeViewMilestone(viewCount);
+        }
 
         Player target = plugin.getTargetPlayer();
         if (target == null || !target.isOnline()) return;
