@@ -56,57 +56,23 @@ messages:
 # ============================================================
 #                    TRIGGERS GLOBAUX
 # ============================================================
-# Ces triggers sont actifs HORS des events de jeu.
-# Pendant un event, les triggers sont definis dans events/*.yml
+# DESACTIVES - Les triggers sont geres par les events (events/*.yml)
+# Activez-les uniquement si vous voulez des actions HORS events
 # ============================================================
 
 triggers:
-  # Messages chat - desactive par defaut
   chat-message:
     enabled: false
-
-  # Super Chats
   super-chat:
-    enabled: true
-    actions:
-      - type: BROADCAST
-        broadcast-type: TITLE
-        message: "&6&lSUPER CHAT!"
-        subtitle: "&e%viewer% - %amount%"
-        broadcast: true
-      - type: SOUND
-        sound: ENTITY_PLAYER_LEVELUP
-        broadcast: true
-
-  # Super Stickers
+    enabled: false
   super-sticker:
-    enabled: true
-    actions:
-      - type: BROADCAST
-        message: "&d[SUPER STICKER] &f%viewer% &7a envoye un sticker!"
-      - type: SOUND
-        sound: ENTITY_PLAYER_LEVELUP
-        broadcast: true
-
-  # Nouveaux membres
+    enabled: false
   new-member:
-    enabled: true
-    actions:
-      - type: BROADCAST
-        message: "&a&l[NOUVEAU MEMBRE] &e%viewer% &aa rejoint la chaine!"
-      - type: SOUND
-        sound: UI_TOAST_CHALLENGE_COMPLETE
-        broadcast: true
-
-  # Likes - desactive par defaut (gere par les events)
+    enabled: false
   like:
     enabled: false
-
-  # Paliers de vues - desactive par defaut
   view-milestone:
     enabled: false
-
-  # Mots-cles - desactives par defaut
   keywords: {}
 
 # ============================================================
