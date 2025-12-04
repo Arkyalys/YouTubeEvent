@@ -16,6 +16,8 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import org.bukkit.Location;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -28,6 +30,7 @@ public class GameManager implements Listener {
     private final YouTubeEventPlugin plugin;
     private final Map<String, GameEvent> registeredGames = new HashMap<>();
     private GameEvent currentGame = null;
+    private Location returnSpawn = null; // Spawn de retour (leave/elimination)
 
     public GameManager(YouTubeEventPlugin plugin) {
         this.plugin = plugin;
@@ -253,6 +256,20 @@ public class GameManager implements Listener {
         for (GameEvent game : registeredGames.values()) {
             game.loadConfig();
         }
+    }
+
+    /**
+     * Définit le spawn de retour (leave/elimination)
+     */
+    public void setReturnSpawn(Location location) {
+        this.returnSpawn = location;
+    }
+
+    /**
+     * Récupère le spawn de retour
+     */
+    public Location getReturnSpawn() {
+        return returnSpawn;
     }
 
     // ==================== Protections Event ====================

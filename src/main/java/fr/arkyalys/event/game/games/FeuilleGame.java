@@ -295,9 +295,14 @@ public class FeuilleGame extends GameEvent implements Listener {
                     for (int y = min.getBlockY(); y <= max.getBlockY(); y++) {
                         for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
                             Block block = world.getBlockAt(x, y, z);
-                            // Si c'est de l'air, remettre des feuilles
+                            // Si c'est de l'air, remettre des feuilles persistantes
                             if (block.getType() == Material.AIR) {
                                 block.setType(leafMaterial);
+                                // Marquer les feuilles comme persistantes (ne decay pas naturellement)
+                                if (block.getBlockData() instanceof org.bukkit.block.data.type.Leaves leavesData) {
+                                    leavesData.setPersistent(true);
+                                    block.setBlockData(leavesData);
+                                }
                                 blocksReplaced++;
                             }
                         }

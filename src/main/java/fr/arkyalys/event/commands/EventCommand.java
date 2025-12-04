@@ -230,7 +230,7 @@ public class EventCommand implements CommandExecutor, TabCompleter {
     }
 
     /**
-     * /event setspawn <event>
+     * /event setspawn <event|spawn>
      */
     private void handleSetSpawn(CommandSender sender, String[] args) {
         if (!hasPermission(sender, "youtubeevent.event.admin")) return;
@@ -241,15 +241,27 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length < 2) {
-            sender.sendMessage((prefix + "&cUtilisation: /event setspawn <nom_event>").replace("&", "§"));
+            sender.sendMessage((prefix + "&cUtilisation: /event setspawn <nom_event|spawn>").replace("&", "§"));
+            sender.sendMessage((prefix + "&7spawn = spawn de retour (leave/elimination)").replace("&", "§"));
             return;
         }
 
-        String gameName = args[1].toLowerCase();
-        GameEvent game = plugin.getGameManager().getGame(gameName);
+        String target = args[1].toLowerCase();
+
+        // Spawn de retour global
+        if (target.equals("spawn")) {
+            plugin.getGameManager().setReturnSpawn(player.getLocation());
+            sender.sendMessage((prefix + "&aSpawn de retour défini à votre position!").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Les joueurs seront TP ici après leave/elimination.").replace("&", "§"));
+            return;
+        }
+
+        // Spawn d'un event spécifique
+        GameEvent game = plugin.getGameManager().getGame(target);
 
         if (game == null) {
-            sender.sendMessage((prefix + "&cEvent inconnu: " + gameName).replace("&", "§"));
+            sender.sendMessage((prefix + "&cEvent inconnu: " + target).replace("&", "§"));
+            sender.sendMessage((prefix + "&7Utilisez &fspawn &7pour le spawn de retour.").replace("&", "§"));
             return;
         }
 
@@ -351,8 +363,20 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         } else if (args.length == 2) {
             String subCommand = args[0].toLowerCase();
 
-            if (subCommand.equals("start") || subCommand.equals("setspawn")) {
+            if (subCommand.equals("start")) {
                 String current = args[1].toLowerCase();
+                for (GameEvent game : plugin.getGameManager().getGames()) {
+                    if (game.getName().startsWith(current)) {
+                        completions.add(game.getName());
+                    }
+                }
+            } else if (subCommand.equals("setspawn")) {
+                String current = args[1].toLowerCase();
+                // Ajouter "spawn" pour le spawn de retour
+                if ("spawn".startsWith(current)) {
+                    completions.add("spawn");
+                }
+                // Ajouter les noms des events
                 for (GameEvent game : plugin.getGameManager().getGames()) {
                     if (game.getName().startsWith(current)) {
                         completions.add(game.getName());

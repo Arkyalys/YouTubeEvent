@@ -414,11 +414,17 @@ public abstract class GameEvent {
     }
 
     /**
-     * Téléporte un joueur au spawn du serveur
+     * Téléporte un joueur au spawn de retour
      */
     protected void teleportToSpawn(Player player) {
-        // Exécuter /spawn sur le joueur
-        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "spawn " + player.getName());
+        // Utiliser le spawn de retour si défini
+        Location returnSpawn = plugin.getGameManager().getReturnSpawn();
+        if (returnSpawn != null) {
+            player.teleport(returnSpawn);
+        } else {
+            // Fallback: exécuter /spawn sur le joueur
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "spawn " + player.getName());
+        }
     }
 
     /**
