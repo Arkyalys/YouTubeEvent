@@ -169,6 +169,9 @@ public class FeuilleGame extends GameEvent implements Listener {
     protected void onBegin() {
         plugin.getLogger().info("Event Feuille commence!");
 
+        // Rendre les feuilles non-persistantes pour qu'elles puissent decay
+        makeLeavesDecayable();
+
         // Démarrer la disparition des feuilles après un délai
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (state == GameState.RUNNING) {
@@ -178,6 +181,49 @@ public class FeuilleGame extends GameEvent implements Listener {
 
         // Broadcast countdown
         broadcastCountdown();
+    }
+
+    /**
+     * Rend les feuilles non-persistantes pour qu'elles puissent decay
+     */
+    private void makeLeavesDecayable() {
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) return;
+
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") == null) return;
+
+        try {
+            RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+            RegionManager regionManager = container.get(BukkitAdapter.adapt(world));
+            if (regionManager == null) return;
+
+            int count = 0;
+            for (String regionName : regionNames) {
+                ProtectedRegion region = regionManager.getRegion(regionName);
+                if (region == null) continue;
+
+                BlockVector3 min = region.getMinimumPoint();
+                BlockVector3 max = region.getMaximumPoint();
+
+                for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
+                    for (int y = min.getBlockY(); y <= max.getBlockY(); y++) {
+                        for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
+                            Block block = world.getBlockAt(x, y, z);
+                            if (block.getBlockData() instanceof org.bukkit.block.data.type.Leaves leavesData) {
+                                if (leavesData.isPersistent()) {
+                                    leavesData.setPersistent(false);
+                                    block.setBlockData(leavesData);
+                                    count++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            plugin.getLogger().info(count + " feuilles rendues non-persistantes (vont decay)");
+        } catch (Exception e) {
+            plugin.getLogger().warning("Erreur makeLeavesDecayable: " + e.getMessage());
+        }
     }
 
     /**
