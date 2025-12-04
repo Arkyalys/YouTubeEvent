@@ -454,25 +454,40 @@ public abstract class GameEvent {
                     .replace("%viewer%", viewer)
                     .replace("%amount%", amount != null ? amount : "")
                     .replace("%event%", name)
-                    .replace("%participants%", String.valueOf(participants.size()));
+                    .replace("%count%", String.valueOf(participants.size()));
 
-            // Gestion de %all%
-            if (finalCmd.contains("%all%")) {
-                for (Player online : Bukkit.getOnlinePlayers()) {
-                    String allCmd = finalCmd.replace("%all%", online.getName());
-                    if (allCmd.startsWith("broadcast ")) {
-                        Bukkit.broadcastMessage(allCmd.substring(10).replace("&", "§"));
-                    } else {
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), allCmd);
+            // %participant% = Execute pour chaque participant de l'event UNIQUEMENT
+            if (finalCmd.contains("%participant%")) {
+                for (UUID uuid : participants) {
+                    Player participant = Bukkit.getPlayer(uuid);
+                    if (participant != null && participant.isOnline()) {
+                        String partCmd = finalCmd.replace("%participant%", participant.getName());
+                        executeCommand(partCmd);
                     }
                 }
-            } else {
-                if (finalCmd.startsWith("broadcast ")) {
-                    Bukkit.broadcastMessage(finalCmd.substring(10).replace("&", "§"));
-                } else {
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCmd);
+            }
+            // %all% = Execute pour tous les joueurs du serveur
+            else if (finalCmd.contains("%all%")) {
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    String allCmd = finalCmd.replace("%all%", online.getName());
+                    executeCommand(allCmd);
                 }
             }
+            // Pas de placeholder joueur = execute une fois
+            else {
+                executeCommand(finalCmd);
+            }
+        }
+    }
+
+    /**
+     * Execute une commande (gère broadcast spécialement)
+     */
+    private void executeCommand(String cmd) {
+        if (cmd.startsWith("broadcast ")) {
+            Bukkit.broadcastMessage(cmd.substring(10).replace("&", "§"));
+        } else {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
         }
     }
 

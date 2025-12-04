@@ -79,11 +79,20 @@ public class FeuilleGame extends GameEvent {
         ));
 
         // Triggers YouTube spécifiques à Feuille
+        // %participant% = seulement les joueurs dans l'event
+        // %all% = tous les joueurs du serveur
         config.set("youtube-triggers.like", List.of(
-                "broadcast &a+1 Like! &7Une feuille de plus disparait!"
+                "broadcast &a+1 Like! &7Merci pour le soutien!",
+                "eco give %participant% 50"
         ));
         config.set("youtube-triggers.super-chat", List.of(
-                "broadcast &d[SUPER CHAT] &f%viewer% &7(%amount%) - &cAcceleration des feuilles!"
+                "broadcast &d[SUPER CHAT] &f%viewer% &7(%amount%)",
+                "eco give %participant% 500",
+                "effect give %participant% speed 10 1"
+        ));
+        config.set("youtube-triggers.new-member", List.of(
+                "broadcast &6[NOUVEAU MEMBRE] &f%viewer% &7rejoint la chaine!",
+                "eco give %participant% 1000"
         ));
     }
 
