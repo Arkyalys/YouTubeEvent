@@ -14,13 +14,17 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import org.bukkit.Location;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Gère tous les events de jeu
@@ -31,6 +35,7 @@ public class GameManager implements Listener {
     private final Map<String, GameEvent> registeredGames = new HashMap<>();
     private GameEvent currentGame = null;
     private Location returnSpawn = null; // Spawn de retour (leave/elimination)
+    private final Set<UUID> disconnectedPlayers = new HashSet<>(); // Joueurs déco pendant un event
 
     public GameManager(YouTubeEventPlugin plugin) {
         this.plugin = plugin;
@@ -233,6 +238,9 @@ public class GameManager implements Listener {
 
         Player player = event.getPlayer();
         if (currentGame.isParticipant(player)) {
+            // Marquer le joueur pour TP au spawn à la reconnexion
+            disconnectedPlayers.add(player.getUniqueId());
+
             if (currentGame.getState() == GameState.RUNNING) {
                 // Éliminer le joueur s'il quitte pendant le jeu
                 currentGame.eliminate(player);
@@ -240,6 +248,24 @@ public class GameManager implements Listener {
                 // Juste le retirer s'il quitte pendant la phase d'inscription
                 currentGame.leave(player);
             }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+
+        // Si le joueur avait déco pendant un event, le TP au spawn
+        if (disconnectedPlayers.remove(player.getUniqueId())) {
+            // Attendre 1 tick pour que le joueur soit bien connecté
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (returnSpawn != null) {
+                    player.teleport(returnSpawn);
+                } else {
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "spawn " + player.getName());
+                }
+                player.sendMessage("§6[Event] §7Vous avez été téléporté au spawn (déconnexion pendant l'event).");
+            }, 5L);
         }
     }
 
