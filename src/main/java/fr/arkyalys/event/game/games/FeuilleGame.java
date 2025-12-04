@@ -17,6 +17,8 @@ import org.bukkit.scheduler.BukkitTask;
 
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBurnEvent;
+import org.bukkit.event.block.BlockSpreadEvent;
 import org.bukkit.event.block.LeavesDecayEvent;
 
 import java.util.List;
@@ -62,6 +64,36 @@ public class FeuilleGame extends GameEvent implements Listener {
         event.getBlock().setType(Material.AIR);
     }
 
+    /**
+     * Empêche les feuilles de brûler dans le monde de l'event
+     */
+    @EventHandler
+    public void onBlockBurn(BlockBurnEvent event) {
+        if (!event.getBlock().getWorld().getName().equals(worldName)) {
+            return;
+        }
+
+        // Bloquer la combustion des feuilles
+        if (event.getBlock().getType().name().contains("LEAVES")) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * Empêche le feu de se propager dans le monde de l'event
+     */
+    @EventHandler
+    public void onFireSpread(BlockSpreadEvent event) {
+        if (!event.getBlock().getWorld().getName().equals(worldName)) {
+            return;
+        }
+
+        // Bloquer la propagation du feu
+        if (event.getSource().getType() == Material.FIRE) {
+            event.setCancelled(true);
+        }
+    }
+
     @Override
     protected void loadEventConfig(YamlConfiguration config) {
         leafDecayStartDelay = config.getInt("feuille.start-delay", 100);
@@ -71,10 +103,15 @@ public class FeuilleGame extends GameEvent implements Listener {
         defaultTickSpeed = config.getInt("feuille.default-tick-speed", 3);
 
         // Charger les régions (peut être une liste)
+        plugin.getLogger().info("[DEBUG] Config file: " + configFile.getAbsolutePath());
+        plugin.getLogger().info("[DEBUG] feuille.regions raw: " + config.get("feuille.regions"));
         regionNames = config.getStringList("feuille.regions");
+        plugin.getLogger().info("[DEBUG] Régions chargées: " + regionNames + " (size=" + regionNames.size() + ")");
         if (regionNames.isEmpty()) {
+            plugin.getLogger().warning("[DEBUG] Liste vide, utilisation du défaut 'feuille'");
             regionNames = List.of("feuille");
         }
+        plugin.getLogger().info("[DEBUG] Régions finales: " + regionNames);
 
         // Charger le type de feuille
         String leafType = config.getString("feuille.leaf-material", "OAK_LEAVES");
