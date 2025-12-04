@@ -3,6 +3,7 @@ package fr.arkyalys.event.display;
 import fr.arkyalys.event.YouTubeEventPlugin;
 import fr.arkyalys.event.game.GameEvent;
 import fr.arkyalys.event.game.GameState;
+import fr.arkyalys.event.util.DebugLogger;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
@@ -75,6 +76,7 @@ public class YouTubeDisplay {
      * Démarre l'affichage pour le live
      */
     public void startLive() {
+        DebugLogger.logDisplay("startLive() appelé");
         this.startTime = System.currentTimeMillis();
         this.running = true;
         this.animationTick = 0;
@@ -83,12 +85,14 @@ public class YouTubeDisplay {
         if (updateTask == null) {
             startUpdateTask();
         }
+        DebugLogger.logDisplay("startLive() terminé - running=" + running);
     }
 
     /**
      * Arrête l'affichage
      */
     public void stopLive() {
+        DebugLogger.logDisplay("stopLive() appelé");
         this.running = false;
 
         if (updateTask != null) {
@@ -100,6 +104,7 @@ public class YouTubeDisplay {
         timeBossBar.removeAll();
         ipBossBar.removeAll();
         viewers.clear();
+        DebugLogger.logDisplay("stopLive() terminé - running=" + running);
     }
 
     /**
@@ -134,9 +139,20 @@ public class YouTubeDisplay {
      * - Si pas d'event: tous les joueurs voient
      */
     public void showAll() {
+        DebugLogger.logDisplay("showAll() appelé - running=" + running);
+
+        // Ne rien faire si pas en cours
+        if (!running) {
+            DebugLogger.logDisplay("showAll() IGNORÉ - not running");
+            return;
+        }
+
         Player targetPlayer = plugin.getTargetPlayer();
         GameEvent currentGame = plugin.getGameManager() != null ?
                 plugin.getGameManager().getCurrentGame() : null;
+
+        String gameState = currentGame != null ? currentGame.getState().toString() : "null";
+        DebugLogger.logDisplay("showAll() - currentGame=" + (currentGame != null ? currentGame.getName() : "null") + ", state=" + gameState);
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             // Le joueur cible voit toujours
@@ -157,6 +173,7 @@ public class YouTubeDisplay {
                 show(player);
             }
         }
+        DebugLogger.logDisplay("showAll() terminé - viewers=" + viewers.size());
     }
 
     /**

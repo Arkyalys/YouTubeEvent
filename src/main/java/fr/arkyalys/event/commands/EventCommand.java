@@ -4,6 +4,7 @@ import fr.arkyalys.event.YouTubeEventPlugin;
 import fr.arkyalys.event.game.GameEvent;
 import fr.arkyalys.event.game.GameManager;
 import fr.arkyalys.event.game.GameState;
+import fr.arkyalys.event.game.games.FeuilleGame;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -44,6 +45,7 @@ public class EventCommand implements CommandExecutor, TabCompleter {
             case "join" -> handleJoin(sender);
             case "leave" -> handleLeave(sender);
             case "setspawn" -> handleSetSpawn(sender, args);
+            case "reset" -> handleReset(sender, args);
             case "status" -> handleStatus(sender);
             case "reload" -> handleReload(sender);
             case "help" -> sendHelp(sender);
@@ -271,6 +273,34 @@ public class EventCommand implements CommandExecutor, TabCompleter {
     }
 
     /**
+     * /event reset <event>
+     */
+    private void handleReset(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        if (args.length < 2) {
+            sender.sendMessage((prefix + "&cUtilisation: /event reset <nom_event>").replace("&", "§"));
+            return;
+        }
+
+        String gameName = args[1].toLowerCase();
+        GameEvent game = plugin.getGameManager().getGame(gameName);
+
+        if (game == null) {
+            sender.sendMessage((prefix + "&cEvent inconnu: " + gameName).replace("&", "§"));
+            return;
+        }
+
+        // Reset spécifique selon le type d'event
+        if (game instanceof FeuilleGame feuilleGame) {
+            feuilleGame.resetLeaves();
+            sender.sendMessage((prefix + "&aFeuilles de l'event &6" + game.getDisplayName() + " &aréinitialisées!").replace("&", "§"));
+        } else {
+            sender.sendMessage((prefix + "&eCet event n'a pas de fonction de reset.").replace("&", "§"));
+        }
+    }
+
+    /**
      * /event status
      */
     private void handleStatus(CommandSender sender) {
@@ -316,7 +346,8 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("&e/event list &7- Liste des events".replace("&", "§"));
         sender.sendMessage("&e/event join &7- Rejoindre l'event".replace("&", "§"));
         sender.sendMessage("&e/event leave &7- Quitter l'event".replace("&", "§"));
-        sender.sendMessage("&e/event setspawn <event> &7- Définir le spawn".replace("&", "§"));
+        sender.sendMessage("&e/event setspawn <event|spawn> &7- Définir le spawn".replace("&", "§"));
+        sender.sendMessage("&e/event reset <event> &7- Reset l'event (feuilles, etc.)".replace("&", "§"));
         sender.sendMessage("&e/event status &7- Voir le statut".replace("&", "§"));
         sender.sendMessage("&e/event reload &7- Recharger les configs".replace("&", "§"));
         sender.sendMessage("&6========================================".replace("&", "§"));
@@ -348,7 +379,7 @@ public class EventCommand implements CommandExecutor, TabCompleter {
 
             // Commandes admin
             if (sender.hasPermission("youtubeevent.event.admin")) {
-                subCommands.addAll(Arrays.asList("start", "begin", "stop", "list", "setspawn", "reload"));
+                subCommands.addAll(Arrays.asList("start", "begin", "stop", "list", "setspawn", "reset", "reload"));
             }
 
             // Commandes joueur
@@ -377,6 +408,13 @@ public class EventCommand implements CommandExecutor, TabCompleter {
                     completions.add("spawn");
                 }
                 // Ajouter les noms des events
+                for (GameEvent game : plugin.getGameManager().getGames()) {
+                    if (game.getName().startsWith(current)) {
+                        completions.add(game.getName());
+                    }
+                }
+            } else if (subCommand.equals("reset")) {
+                String current = args[1].toLowerCase();
                 for (GameEvent game : plugin.getGameManager().getGames()) {
                     if (game.getName().startsWith(current)) {
                         completions.add(game.getName());

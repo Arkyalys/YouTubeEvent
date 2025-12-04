@@ -1,6 +1,7 @@
 package fr.arkyalys.event.game;
 
 import fr.arkyalys.event.YouTubeEventPlugin;
+import fr.arkyalys.event.util.DebugLogger;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -159,7 +160,10 @@ public abstract class GameEvent {
      * Ouvre l'event (phase d'inscription)
      */
     public boolean open() {
+        DebugLogger.logGame(name, "open() appelé - state actuel: " + state);
+
         if (state != GameState.WAITING) {
+            DebugLogger.logGame(name, "open() REFUSÉ - state != WAITING");
             return false;
         }
 
@@ -167,6 +171,7 @@ public abstract class GameEvent {
         World world = Bukkit.getWorld(worldName);
         if (world == null) {
             plugin.getLogger().warning("Le monde '" + worldName + "' n'existe pas pour l'event " + name);
+            DebugLogger.logGame(name, "open() REFUSÉ - monde introuvable: " + worldName);
             return false;
         }
 
@@ -179,9 +184,11 @@ public abstract class GameEvent {
         participants.clear();
         eliminated.clear();
 
+        DebugLogger.logGame(name, "state -> OPEN, appel onOpen()");
         onOpen();
 
         // Synchroniser l'affichage YouTube (maintenant filtré par event)
+        DebugLogger.logGame(name, "appel display.syncWithEvent()");
         plugin.getDisplay().syncWithEvent();
 
         // Broadcast
@@ -196,6 +203,7 @@ public abstract class GameEvent {
             Bukkit.broadcastMessage(("&7Regardez le live: &b" + liveLink).replace("&", "§"));
         }
 
+        DebugLogger.logGame(name, "open() TERMINÉ avec succès");
         return true;
     }
 
@@ -225,13 +233,18 @@ public abstract class GameEvent {
      * Arrête l'event
      */
     public void stop() {
+        DebugLogger.logGame(name, "stop() appelé - state actuel: " + state);
+
         if (state == GameState.WAITING) {
+            DebugLogger.logGame(name, "stop() IGNORÉ - déjà WAITING");
             return;
         }
 
+        DebugLogger.logGame(name, "appel onStop()");
         onStop();
 
         // Téléporter tous les participants au spawn
+        DebugLogger.logGame(name, "TP des " + participants.size() + " participants au spawn");
         for (UUID uuid : participants) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
@@ -243,12 +256,19 @@ public abstract class GameEvent {
         participants.clear();
         eliminated.clear();
 
-        // Synchroniser l'affichage YouTube (tout le monde peut voir à nouveau)
-        plugin.getDisplay().showAll();
+        // Synchroniser l'affichage YouTube (tout le monde peut voir à nouveau SI connecté)
+        DebugLogger.logGame(name, "appel display.showAll() - isConnected: " + plugin.isConnected());
+        if (plugin.isConnected()) {
+            plugin.getDisplay().showAll();
+        } else {
+            DebugLogger.logGame(name, "YouTube non connecté, pas d'affichage");
+        }
 
         String message = plugin.getConfigManager().getPrefix() +
                 "&cL'event &6" + displayName + " &ca été arrêté.";
         Bukkit.broadcastMessage(message.replace("&", "§"));
+
+        DebugLogger.logGame(name, "stop() TERMINÉ");
     }
 
     /**
@@ -385,6 +405,7 @@ public abstract class GameEvent {
      * Déclare un gagnant
      */
     public void win(Player winner) {
+        DebugLogger.logGame(name, "win() appelé - winner: " + winner.getName());
         state = GameState.ENDED;
 
         String message = plugin.getConfigManager().getPrefix() +
@@ -394,9 +415,11 @@ public abstract class GameEvent {
         // Exécuter les commandes de victoire
         executeCommands(winCommands, winner);
 
+        DebugLogger.logGame(name, "appel onWin()");
         onWin(winner);
 
         // Téléporter tout le monde au spawn
+        DebugLogger.logGame(name, "TP des " + participants.size() + " participants au spawn");
         for (UUID uuid : participants) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
@@ -409,8 +432,13 @@ public abstract class GameEvent {
         eliminated.clear();
         state = GameState.WAITING;
 
-        // Synchroniser l'affichage YouTube (tout le monde peut voir à nouveau)
-        plugin.getDisplay().showAll();
+        // Synchroniser l'affichage YouTube (seulement si connecté)
+        DebugLogger.logGame(name, "appel display.showAll() - isConnected: " + plugin.isConnected());
+        if (plugin.isConnected()) {
+            plugin.getDisplay().showAll();
+        }
+
+        DebugLogger.logGame(name, "win() TERMINÉ");
     }
 
     /**

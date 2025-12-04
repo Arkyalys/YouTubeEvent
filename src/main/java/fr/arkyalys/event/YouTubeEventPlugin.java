@@ -8,6 +8,7 @@ import fr.arkyalys.event.config.ConfigManager;
 import fr.arkyalys.event.display.YouTubeDisplay;
 import fr.arkyalys.event.events.EventManager;
 import fr.arkyalys.event.game.GameManager;
+import fr.arkyalys.event.util.DebugLogger;
 import fr.arkyalys.event.youtube.YouTubeAPI;
 import fr.arkyalys.event.youtube.LiveChatPoller;
 import fr.arkyalys.event.youtube.LiveAutoDetector;
@@ -40,6 +41,10 @@ public class YouTubeEventPlugin extends JavaPlugin {
 
         // Sauvegarder la config par défaut
         saveDefaultConfig();
+
+        // Initialiser le debug logger
+        DebugLogger.init(this);
+        DebugLogger.log("Plugin", "=== YouTubeEvent démarre ===");
 
         // Initialiser les managers
         this.configManager = new ConfigManager(this);

@@ -116,7 +116,16 @@ public class FeuilleGame extends GameEvent implements Listener {
 
     @Override
     protected void onOpen() {
+        // Reset les feuilles à l'ouverture
+        regenerateLeaves();
         plugin.getLogger().info("Event Feuille ouvert!");
+    }
+
+    /**
+     * Reset manuel des feuilles (appelable via commande)
+     */
+    public void resetLeaves() {
+        regenerateLeaves();
     }
 
     @Override
