@@ -57,6 +57,7 @@ public class EventCommand implements CommandExecutor, TabCompleter {
 
     /**
      * /event start <event>
+     * Si l'event est déjà ouvert, le lance (begin)
      */
     private void handleStart(CommandSender sender, String[] args) {
         if (!hasPermission(sender, "youtubeevent.event.admin")) return;
@@ -68,12 +69,6 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         }
 
         GameManager gameManager = plugin.getGameManager();
-
-        if (gameManager.hasActiveGame()) {
-            sender.sendMessage((prefix + "&cUn event est déjà en cours! Utilisez /event stop d'abord.").replace("&", "§"));
-            return;
-        }
-
         String gameName = args[1].toLowerCase();
         GameEvent game = gameManager.getGame(gameName);
 
@@ -83,9 +78,38 @@ public class EventCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        // Si cet event est déjà ouvert, le lancer (begin)
+        GameEvent currentGame = gameManager.getCurrentGame();
+        if (currentGame != null && currentGame.getName().equals(gameName)) {
+            if (currentGame.getState() == GameState.OPEN) {
+                // Lancer le jeu
+                if (currentGame.getParticipantCount() < currentGame.getMinPlayers()) {
+                    sender.sendMessage((prefix + "&cPas assez de joueurs! Minimum: " + currentGame.getMinPlayers() +
+                            " (actuellement: " + currentGame.getParticipantCount() + ")").replace("&", "§"));
+                    return;
+                }
+                if (gameManager.beginGame()) {
+                    sender.sendMessage((prefix + "&aEvent &6" + game.getDisplayName() + " &alancé!").replace("&", "§"));
+                } else {
+                    sender.sendMessage((prefix + "&cImpossible de lancer l'event.").replace("&", "§"));
+                }
+                return;
+            } else if (currentGame.getState() == GameState.RUNNING) {
+                sender.sendMessage((prefix + "&cCet event est déjà en cours!").replace("&", "§"));
+                return;
+            }
+        }
+
+        // Si un autre event est actif
+        if (gameManager.hasActiveGame()) {
+            sender.sendMessage((prefix + "&cUn autre event est en cours! Utilisez /event stop d'abord.").replace("&", "§"));
+            return;
+        }
+
+        // Ouvrir l'event
         if (gameManager.startGame(gameName)) {
             sender.sendMessage((prefix + "&aEvent &6" + game.getDisplayName() + " &aouvert!").replace("&", "§"));
-            sender.sendMessage((prefix + "&7Utilisez &f/event begin &7pour lancer le jeu.").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Refaites &f/event start " + gameName + " &7pour lancer le jeu.").replace("&", "§"));
         } else {
             sender.sendMessage((prefix + "&cImpossible d'ouvrir l'event. Vérifiez que le monde existe.").replace("&", "§"));
         }

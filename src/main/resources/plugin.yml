@@ -5,7 +5,7 @@ api-version: "1.21"
 author: Arkyalys
 description: Connecte YouTube Live a Minecraft pour declencher des evenements in-game
 
-softdepend: [Multiverse-Core]
+softdepend: [Multiverse-Core, WorldGuard]
 
 commands:
   youtube:

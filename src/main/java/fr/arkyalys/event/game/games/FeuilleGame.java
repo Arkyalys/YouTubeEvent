@@ -1,5 +1,11 @@
 package fr.arkyalys.event.game.games;
 
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldguard.WorldGuard;
+import com.sk89q.worldguard.protection.managers.RegionManager;
+import com.sk89q.worldguard.protection.regions.ProtectedRegion;
+import com.sk89q.worldguard.protection.regions.RegionContainer;
 import fr.arkyalys.event.YouTubeEventPlugin;
 import fr.arkyalys.event.game.GameEvent;
 import fr.arkyalys.event.game.GameState;
@@ -9,74 +15,86 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.ArrayList;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.block.LeavesDecayEvent;
+
 import java.util.List;
 import java.util.UUID;
 
 /**
- * Event "Feuille" - Les feuilles disparaissent progressivement
+ * Event "Feuille" - Les feuilles disparaissent progressivement via randomTickSpeed
  * Dernier survivant gagne!
  */
-public class FeuilleGame extends GameEvent {
+public class FeuilleGame extends GameEvent implements Listener {
 
     // Config spécifique
-    private int leafDecayDelay = 20; // Ticks entre chaque vague de disparition
-    private int leafDecayRadius = 1; // Nombre de blocs qui disparaissent par vague
     private int leafDecayStartDelay = 100; // Délai avant le début de la disparition (5 secondes)
-    private List<Material> leafMaterials = new ArrayList<>();
+    private int normalTickSpeed = 100;     // Vitesse normale pendant l'event
+    private int boostTickSpeed = 300;      // Vitesse pendant le boost (like)
+    private int boostDuration = 60;        // Durée du boost en ticks (3 secondes)
+    private int defaultTickSpeed = 3;      // Vitesse par défaut de Minecraft (reset à la fin)
+    private List<String> regionNames = List.of("feuille"); // Régions WorldGuard pour régénérer
+    private Material leafMaterial = Material.OAK_LEAVES; // Type de feuille à régénérer
 
     // Runtime
-    private BukkitTask decayTask;
+    private BukkitTask boostTask;
+    private boolean boosted = false;
 
     public FeuilleGame(YouTubeEventPlugin plugin) {
         super(plugin, "feuille");
+        // Enregistrer le listener pour bloquer les drops de feuilles
+        Bukkit.getPluginManager().registerEvents(this, plugin);
+    }
+
+    /**
+     * Empêche les feuilles de drop des items dans le monde de l'event
+     */
+    @EventHandler
+    public void onLeavesDecay(LeavesDecayEvent event) {
+        // Vérifier si c'est le monde de l'event
+        if (!event.getBlock().getWorld().getName().equals(worldName)) {
+            return;
+        }
+
+        // Empêcher le drop (le bloc disparaît mais pas de drop)
+        event.setCancelled(true);
+        event.getBlock().setType(Material.AIR);
     }
 
     @Override
     protected void loadEventConfig(YamlConfiguration config) {
-        leafDecayDelay = config.getInt("feuille.decay-delay", 20);
-        leafDecayRadius = config.getInt("feuille.decay-radius", 1);
         leafDecayStartDelay = config.getInt("feuille.start-delay", 100);
+        normalTickSpeed = config.getInt("feuille.normal-tick-speed", 100);
+        boostTickSpeed = config.getInt("feuille.boost-tick-speed", 300);
+        boostDuration = config.getInt("feuille.boost-duration", 60);
+        defaultTickSpeed = config.getInt("feuille.default-tick-speed", 3);
 
-        // Charger les types de feuilles
-        leafMaterials.clear();
-        List<String> materials = config.getStringList("feuille.leaf-materials");
-        if (materials.isEmpty()) {
-            // Par défaut, tous les types de feuilles
-            leafMaterials.add(Material.OAK_LEAVES);
-            leafMaterials.add(Material.SPRUCE_LEAVES);
-            leafMaterials.add(Material.BIRCH_LEAVES);
-            leafMaterials.add(Material.JUNGLE_LEAVES);
-            leafMaterials.add(Material.ACACIA_LEAVES);
-            leafMaterials.add(Material.DARK_OAK_LEAVES);
-            leafMaterials.add(Material.AZALEA_LEAVES);
-            leafMaterials.add(Material.FLOWERING_AZALEA_LEAVES);
-            leafMaterials.add(Material.MANGROVE_LEAVES);
-            leafMaterials.add(Material.CHERRY_LEAVES);
-        } else {
-            for (String mat : materials) {
-                try {
-                    leafMaterials.add(Material.valueOf(mat.toUpperCase()));
-                } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Matériau invalide dans config feuille: " + mat);
-                }
-            }
+        // Charger les régions (peut être une liste)
+        regionNames = config.getStringList("feuille.regions");
+        if (regionNames.isEmpty()) {
+            regionNames = List.of("feuille");
+        }
+
+        // Charger le type de feuille
+        String leafType = config.getString("feuille.leaf-material", "OAK_LEAVES");
+        try {
+            leafMaterial = Material.valueOf(leafType.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            leafMaterial = Material.OAK_LEAVES;
+            plugin.getLogger().warning("Matériau invalide: " + leafType + ", utilisation de OAK_LEAVES");
         }
     }
 
     @Override
     protected void saveDefaultEventConfig(YamlConfiguration config) {
-        config.set("feuille.decay-delay", 20);
-        config.set("feuille.decay-radius", 1);
-        config.set("feuille.start-delay", 100);
-        config.set("feuille.leaf-materials", List.of(
-                "OAK_LEAVES",
-                "SPRUCE_LEAVES",
-                "BIRCH_LEAVES",
-                "JUNGLE_LEAVES",
-                "ACACIA_LEAVES",
-                "DARK_OAK_LEAVES"
-        ));
+        config.set("feuille.start-delay", 100);           // 5 sec avant début
+        config.set("feuille.normal-tick-speed", 100);     // Vitesse normale pendant event
+        config.set("feuille.boost-tick-speed", 300);      // Vitesse pendant boost (like)
+        config.set("feuille.boost-duration", 60);         // 3 sec de boost par like
+        config.set("feuille.default-tick-speed", 3);      // Vitesse Minecraft par défaut (reset)
+        config.set("feuille.regions", List.of("feuille1", "feuille2")); // Régions WorldGuard à régénérer
+        config.set("feuille.leaf-material", "OAK_LEAVES");// Type de feuille à régénérer
 
         // Triggers YouTube spécifiques à Feuille
         // %participant% = seulement les joueurs dans l'event
@@ -155,82 +173,171 @@ public class FeuilleGame extends GameEvent {
     }
 
     /**
-     * Démarre la tâche de disparition des feuilles
+     * Démarre la disparition des feuilles via randomTickSpeed
      */
     private void startLeafDecay() {
         World world = Bukkit.getWorld(worldName);
         if (world == null) {
+            plugin.getLogger().warning("Monde '" + worldName + "' introuvable pour l'event Feuille!");
             return;
         }
 
-        decayTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            if (state != GameState.RUNNING) {
-                cancelDecayTask();
+        // Reset boost
+        boosted = false;
+        cancelBoostTask();
+
+        // Activer le randomTickSpeed élevé sur le monde feuille
+        setRandomTickSpeed(world, normalTickSpeed);
+        plugin.getLogger().info("RandomTickSpeed du monde '" + worldName + "' réglé à " + normalTickSpeed);
+    }
+
+    /**
+     * Active le boost de vitesse de disparition (appelé par les likes YouTube)
+     */
+    public void triggerBoost() {
+        if (state != GameState.RUNNING) return;
+
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) return;
+
+        // Activer le boost
+        boosted = true;
+        setRandomTickSpeed(world, boostTickSpeed);
+
+        // Annuler le précédent timer de boost si existant
+        cancelBoostTask();
+
+        // Effet visuel pour tous les participants
+        for (UUID uuid : participants) {
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && player.isOnline()) {
+                player.playSound(player.getLocation(), Sound.ENTITY_WITHER_SPAWN, 0.3f, 2f);
+                player.sendTitle(
+                        ChatColor.translateAlternateColorCodes('&', "&c&l⚡ BOOST ⚡"),
+                        ChatColor.translateAlternateColorCodes('&', "&7Les feuilles tombent plus vite!"),
+                        5, 20, 5
+                );
+            }
+        }
+
+        // Programmer la fin du boost
+        boostTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (state == GameState.RUNNING) {
+                boosted = false;
+                setRandomTickSpeed(world, normalTickSpeed);
+                plugin.getLogger().info("Boost terminé - RandomTickSpeed revenu à " + normalTickSpeed);
+            }
+        }, boostDuration);
+    }
+
+    /**
+     * Définit le randomTickSpeed d'un monde
+     */
+    private void setRandomTickSpeed(World world, int speed) {
+        world.setGameRule(GameRule.RANDOM_TICK_SPEED, speed);
+    }
+
+    /**
+     * Remet le randomTickSpeed par défaut
+     */
+    private void resetRandomTickSpeed() {
+        World world = Bukkit.getWorld(worldName);
+        if (world != null) {
+            setRandomTickSpeed(world, defaultTickSpeed);
+            plugin.getLogger().info("RandomTickSpeed du monde '" + worldName + "' remis à " + defaultTickSpeed);
+        }
+    }
+
+    /**
+     * Régénère les feuilles dans toutes les régions WorldGuard configurées
+     */
+    private void regenerateLeaves() {
+        // Vérifier si WorldGuard est disponible
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") == null) {
+            plugin.getLogger().warning("WorldGuard non installé - impossible de régénérer les feuilles");
+            return;
+        }
+
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) {
+            plugin.getLogger().warning("Monde '" + worldName + "' introuvable pour régénérer les feuilles");
+            return;
+        }
+
+        try {
+            // Obtenir le RegionContainer de WorldGuard
+            RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+            RegionManager regionManager = container.get(BukkitAdapter.adapt(world));
+
+            if (regionManager == null) {
+                plugin.getLogger().warning("Impossible d'obtenir le RegionManager pour le monde '" + worldName + "'");
                 return;
             }
 
-            // Faire disparaître des feuilles aléatoires autour des joueurs
-            for (UUID uuid : participants) {
-                Player player = Bukkit.getPlayer(uuid);
-                if (player == null || !player.isOnline()) continue;
+            int totalBlocksReplaced = 0;
 
-                // Chercher des feuilles sous le joueur
-                Location playerLoc = player.getLocation();
-                for (int x = -leafDecayRadius; x <= leafDecayRadius; x++) {
-                    for (int z = -leafDecayRadius; z <= leafDecayRadius; z++) {
-                        for (int y = -3; y <= 0; y++) {
-                            Block block = playerLoc.clone().add(x, y, z).getBlock();
-                            if (isLeaf(block.getType())) {
-                                // Chance de disparition
-                                if (Math.random() < 0.3) {
-                                    // Effet visuel
-                                    world.spawnParticle(
-                                            Particle.BLOCK,
-                                            block.getLocation().add(0.5, 0.5, 0.5),
-                                            10,
-                                            0.3, 0.3, 0.3,
-                                            0.1,
-                                            block.getBlockData()
-                                    );
+            // Parcourir toutes les régions configurées
+            for (String regionName : regionNames) {
+                ProtectedRegion region = regionManager.getRegion(regionName);
+                if (region == null) {
+                    plugin.getLogger().warning("Région '" + regionName + "' introuvable dans le monde '" + worldName + "'");
+                    continue;
+                }
 
-                                    // Son
-                                    world.playSound(
-                                            block.getLocation(),
-                                            Sound.BLOCK_GRASS_BREAK,
-                                            0.5f, 1f
-                                    );
+                // Obtenir les bornes de la région
+                BlockVector3 min = region.getMinimumPoint();
+                BlockVector3 max = region.getMaximumPoint();
 
-                                    // Supprimer le bloc
-                                    block.setType(Material.AIR);
-                                }
+                int blocksReplaced = 0;
+
+                // Parcourir tous les blocs de la région
+                for (int x = min.getBlockX(); x <= max.getBlockX(); x++) {
+                    for (int y = min.getBlockY(); y <= max.getBlockY(); y++) {
+                        for (int z = min.getBlockZ(); z <= max.getBlockZ(); z++) {
+                            Block block = world.getBlockAt(x, y, z);
+                            // Si c'est de l'air, remettre des feuilles
+                            if (block.getType() == Material.AIR) {
+                                block.setType(leafMaterial);
+                                blocksReplaced++;
                             }
                         }
                     }
                 }
+
+                totalBlocksReplaced += blocksReplaced;
+                plugin.getLogger().info("Région '" + regionName + "': " + blocksReplaced + " feuilles régénérées");
             }
-        }, 0L, leafDecayDelay);
+
+            plugin.getLogger().info("Régénération terminée: " + totalBlocksReplaced + " feuilles au total");
+
+        } catch (Exception e) {
+            plugin.getLogger().warning("Erreur lors de la régénération des feuilles: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /**
-     * Vérifie si un matériau est une feuille
+     * Vérifie si le boost est actif
      */
-    private boolean isLeaf(Material material) {
-        return leafMaterials.contains(material);
+    public boolean isBoosted() {
+        return boosted;
     }
 
     /**
-     * Annule la tâche de disparition
+     * Annule la tâche de boost
      */
-    private void cancelDecayTask() {
-        if (decayTask != null) {
-            decayTask.cancel();
-            decayTask = null;
+    private void cancelBoostTask() {
+        if (boostTask != null) {
+            boostTask.cancel();
+            boostTask = null;
         }
     }
 
     @Override
     protected void onStop() {
-        cancelDecayTask();
+        cancelBoostTask();
+        resetRandomTickSpeed();
+        regenerateLeaves();
         plugin.getLogger().info("Event Feuille arrêté!");
     }
 
@@ -253,7 +360,9 @@ public class FeuilleGame extends GameEvent {
 
     @Override
     protected void onWin(Player winner) {
-        cancelDecayTask();
+        cancelBoostTask();
+        resetRandomTickSpeed();
+        regenerateLeaves();
 
         // Feux d'artifice pour le gagnant
         Location loc = winner.getLocation();
@@ -265,38 +374,4 @@ public class FeuilleGame extends GameEvent {
         }
     }
 
-    /**
-     * Force la disparition de feuilles (appelé par les triggers YouTube)
-     */
-    public void forceLeafDecay(int amount) {
-        if (state != GameState.RUNNING) return;
-
-        World world = Bukkit.getWorld(worldName);
-        if (world == null) return;
-
-        int destroyed = 0;
-        for (UUID uuid : participants) {
-            Player player = Bukkit.getPlayer(uuid);
-            if (player == null) continue;
-
-            Location loc = player.getLocation();
-            for (int x = -5; x <= 5 && destroyed < amount; x++) {
-                for (int z = -5; z <= 5 && destroyed < amount; z++) {
-                    for (int y = -5; y <= 0 && destroyed < amount; y++) {
-                        Block block = loc.clone().add(x, y, z).getBlock();
-                        if (isLeaf(block.getType())) {
-                            block.setType(Material.AIR);
-                            world.spawnParticle(
-                                    Particle.BLOCK,
-                                    block.getLocation().add(0.5, 0.5, 0.5),
-                                    10, 0.3, 0.3, 0.3, 0.1,
-                                    block.getBlockData()
-                            );
-                            destroyed++;
-                        }
-                    }
-                }
-            }
-        }
-    }
 }

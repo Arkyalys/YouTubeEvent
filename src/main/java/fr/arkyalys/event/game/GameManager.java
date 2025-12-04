@@ -8,7 +8,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.Collection;
@@ -181,6 +186,11 @@ public class GameManager implements Listener {
         // Exécuter X fois pour chaque like
         for (int i = 0; i < newLikes; i++) {
             currentGame.handleYouTubeTrigger("like", "Viewer", String.valueOf(totalLikes));
+
+            // Si c'est l'event Feuille, activer le boost
+            if (currentGame instanceof FeuilleGame feuilleGame) {
+                feuilleGame.triggerBoost();
+            }
         }
     }
 
@@ -243,5 +253,97 @@ public class GameManager implements Listener {
         for (GameEvent game : registeredGames.values()) {
             game.loadConfig();
         }
+    }
+
+    // ==================== Protections Event ====================
+
+    /**
+     * Vérifie si un joueur est protégé (participant et non-OP)
+     */
+    private boolean isProtectedParticipant(Player player) {
+        if (player.isOp()) return false;
+        if (currentGame == null) return false;
+        if (currentGame.getState() != GameState.RUNNING && currentGame.getState() != GameState.OPEN) return false;
+        return currentGame.isParticipant(player);
+    }
+
+    /**
+     * Bloque le PvP entre participants
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        // Vérifier si c'est un joueur qui attaque
+        if (!(event.getDamager() instanceof Player attacker)) return;
+        // Vérifier si la victime est un joueur
+        if (!(event.getEntity() instanceof Player victim)) return;
+
+        // Si l'attaquant OU la victime est un participant protégé, bloquer
+        if (isProtectedParticipant(attacker) || isProtectedParticipant(victim)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * Bloque la perte de faim pour les participants
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onFoodLevelChange(FoodLevelChangeEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+
+        if (isProtectedParticipant(player)) {
+            // Bloquer la perte de faim (mais pas le gain)
+            if (event.getFoodLevel() < player.getFoodLevel()) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    /**
+     * Bloque le cassage de blocs pour les participants
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBlockBreak(BlockBreakEvent event) {
+        Player player = event.getPlayer();
+
+        if (isProtectedParticipant(player)) {
+            event.setCancelled(true);
+            player.sendMessage("§c§l[Event] §7Vous ne pouvez pas casser de blocs pendant l'event!");
+        }
+    }
+
+    /**
+     * Bloque le placement de blocs pour les participants
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Player player = event.getPlayer();
+
+        if (isProtectedParticipant(player)) {
+            event.setCancelled(true);
+            player.sendMessage("§c§l[Event] §7Vous ne pouvez pas placer de blocs pendant l'event!");
+        }
+    }
+
+    /**
+     * Bloque les commandes sauf /event leave pour les participants
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
+        Player player = event.getPlayer();
+
+        if (!isProtectedParticipant(player)) return;
+
+        String message = event.getMessage().toLowerCase();
+
+        // Autoriser /event leave et ses alias
+        if (message.startsWith("/event leave") ||
+            message.startsWith("/ev leave") ||
+            message.startsWith("/events leave")) {
+            return;
+        }
+
+        // Bloquer toutes les autres commandes
+        event.setCancelled(true);
+        player.sendMessage("§c§l[Event] §7Vous ne pouvez utiliser que §f/event leave §7pendant l'event!");
     }
 }

@@ -1,6 +1,8 @@
 package fr.arkyalys.event.display;
 
 import fr.arkyalys.event.YouTubeEventPlugin;
+import fr.arkyalys.event.game.GameEvent;
+import fr.arkyalys.event.game.GameState;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
@@ -13,6 +15,7 @@ import org.bukkit.scheduler.BukkitTask;
 import java.text.DecimalFormat;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Affichage stylé avec BossBars et ActionBar pour les stats YouTube
@@ -125,12 +128,44 @@ public class YouTubeDisplay {
     }
 
     /**
-     * Affiche pour tous les joueurs
+     * Affiche pour les joueurs appropriés selon le contexte
+     * - Le joueur cible (streamer) voit toujours l'affichage
+     * - Si un event est actif: seulement les participants voient
+     * - Si pas d'event: tous les joueurs voient
      */
     public void showAll() {
+        Player targetPlayer = plugin.getTargetPlayer();
+        GameEvent currentGame = plugin.getGameManager() != null ?
+                plugin.getGameManager().getCurrentGame() : null;
+
         for (Player player : Bukkit.getOnlinePlayers()) {
-            show(player);
+            // Le joueur cible voit toujours
+            if (targetPlayer != null && player.getUniqueId().equals(targetPlayer.getUniqueId())) {
+                show(player);
+                continue;
+            }
+
+            // Si un event est actif (OPEN ou RUNNING), seuls les participants voient
+            if (currentGame != null && currentGame.getState() != GameState.WAITING) {
+                if (currentGame.isParticipant(player)) {
+                    show(player);
+                } else {
+                    hide(player);
+                }
+            } else {
+                // Pas d'event actif = tout le monde voit
+                show(player);
+            }
         }
+    }
+
+    /**
+     * Synchronise les viewers avec les participants de l'event actuel
+     * Appelé quand un joueur rejoint/quitte un event
+     */
+    public void syncWithEvent() {
+        if (!running) return;
+        showAll();
     }
 
     /**
@@ -153,6 +188,11 @@ public class YouTubeDisplay {
 
             animationTick++;
 
+            // Synchroniser les viewers avec l'event toutes les 2 secondes (tous les 4 ticks à 10 ticks/update)
+            if (animationTick % 4 == 0) {
+                syncViewersWithEvent();
+            }
+
             // Mettre à jour les bossbars et actionbar
             updateTimeBossBar();
             updateActionBar();
@@ -162,6 +202,41 @@ public class YouTubeDisplay {
             viewers.removeIf(p -> !p.isOnline());
 
         }, 0L, 10L); // Update toutes les 0.5 secondes (10 ticks)
+    }
+
+    /**
+     * Synchronise les viewers avec l'état de l'event
+     */
+    private void syncViewersWithEvent() {
+        Player targetPlayer = plugin.getTargetPlayer();
+        GameEvent currentGame = plugin.getGameManager() != null ?
+                plugin.getGameManager().getCurrentGame() : null;
+
+        // Si un event est actif
+        if (currentGame != null && currentGame.getState() != GameState.WAITING) {
+            Set<UUID> participants = currentGame.getParticipants();
+
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                boolean isTarget = targetPlayer != null &&
+                        player.getUniqueId().equals(targetPlayer.getUniqueId());
+                boolean isParticipant = participants.contains(player.getUniqueId());
+                boolean isViewing = viewers.contains(player);
+
+                // Le target voit toujours
+                if (isTarget) {
+                    if (!isViewing) show(player);
+                    continue;
+                }
+
+                // Les participants voient, les autres non
+                if (isParticipant && !isViewing) {
+                    show(player);
+                } else if (!isParticipant && isViewing) {
+                    hide(player);
+                }
+            }
+        }
+        // Pas d'event actif = tout le monde peut voir (géré par showAll initial)
     }
 
     /**

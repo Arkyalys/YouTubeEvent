@@ -181,6 +181,9 @@ public abstract class GameEvent {
 
         onOpen();
 
+        // Synchroniser l'affichage YouTube (maintenant filtré par event)
+        plugin.getDisplay().syncWithEvent();
+
         // Broadcast
         String message = plugin.getConfigManager().getPrefix() +
                 "&aL'event &6" + displayName + " &aest ouvert! &7Utilisez &f/event join &7pour rejoindre!";
@@ -240,6 +243,9 @@ public abstract class GameEvent {
         participants.clear();
         eliminated.clear();
 
+        // Synchroniser l'affichage YouTube (tout le monde peut voir à nouveau)
+        plugin.getDisplay().showAll();
+
         String message = plugin.getConfigManager().getPrefix() +
                 "&cL'event &6" + displayName + " &ca été arrêté.";
         Bukkit.broadcastMessage(message.replace("&", "§"));
@@ -279,6 +285,9 @@ public abstract class GameEvent {
 
         onPlayerJoin(player);
 
+        // Synchroniser l'affichage YouTube avec les participants
+        plugin.getDisplay().syncWithEvent();
+
         player.sendMessage((plugin.getConfigManager().getPrefix() +
                 "&aVous avez rejoint l'event &6" + displayName + "&a!").replace("&", "§"));
 
@@ -301,6 +310,9 @@ public abstract class GameEvent {
         participants.remove(player.getUniqueId());
         onPlayerLeave(player);
         teleportToSpawn(player);
+
+        // Synchroniser l'affichage YouTube (retirer le joueur)
+        plugin.getDisplay().syncWithEvent();
 
         player.sendMessage((plugin.getConfigManager().getPrefix() +
                 "&eVous avez quitté l'event.").replace("&", "§"));
@@ -331,6 +343,9 @@ public abstract class GameEvent {
 
         // Téléporter au spawn
         teleportToSpawn(player);
+
+        // Synchroniser l'affichage YouTube (retirer le joueur éliminé)
+        plugin.getDisplay().syncWithEvent();
 
         String message = "&c" + player.getName() + " &7a été éliminé! &8(" +
                 participants.size() + " restants)";
@@ -393,6 +408,9 @@ public abstract class GameEvent {
         participants.clear();
         eliminated.clear();
         state = GameState.WAITING;
+
+        // Synchroniser l'affichage YouTube (tout le monde peut voir à nouveau)
+        plugin.getDisplay().showAll();
     }
 
     /**
