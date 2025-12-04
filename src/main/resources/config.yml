@@ -377,10 +377,19 @@ triggers:
 #                     PLACEHOLDERS
 # ============================================================
 #
+# Basiques:
 # %viewer%       - Nom du viewer YouTube
 # %message%      - Message du viewer
 # %player%       - Nom du joueur cible (streamer)
 # %amount%       - Montant affiche (Super Chat)
 # %amount_value% - Valeur numerique du montant
+# %all%          - Execute la commande pour chaque joueur en ligne
+#
+# Infos auteur YouTube:
+# %author_role%  - Role principal (OWNER, MODERATOR, SPONSOR, VIEWER)
+# %author_roles% - Tous les roles separes par virgule
+# %is_owner%     - true/false si proprietaire de la chaine
+# %is_moderator% - true/false si moderateur
+# %is_sponsor%   - true/false si membre/sponsor
 #
 # ============================================================

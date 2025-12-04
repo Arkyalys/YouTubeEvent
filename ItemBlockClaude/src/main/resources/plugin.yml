@@ -1,8 +1,0 @@
-name: ItemBlockClaude
-version: ${project.version}
-main: net.player005.itemblockclaude.ItemBlockClaude
-api-version: '1.21'
-description: Allows blocking your sword to reduce taken damage like in older Minecraft versions
-authors:
-  - Claude
-  - Arkyalys
