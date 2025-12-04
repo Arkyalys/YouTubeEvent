@@ -1,0 +1,11 @@
+# ItemBlockClaude Configuration
+# Compatible with Minecraft 1.21.1
+
+# Damage multiplier when blocking with a sword
+# 0.5 = 50% damage taken (50% reduction)
+# 0.0 = No damage (100% reduction)
+# 1.0 = Full damage (no reduction)
+sword-blocking-damage-multiplier: 0.5
+
+# Enable debug messages in console
+debug: false

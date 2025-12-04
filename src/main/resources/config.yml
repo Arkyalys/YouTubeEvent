@@ -1,0 +1,386 @@
+# ============================================================
+#                    YouTubeEvent Configuration
+# ============================================================
+# Plugin qui connecte YouTube Live a votre serveur Minecraft
+# pour declencher des evenements in-game bases sur les
+# interactions des viewers.
+# ============================================================
+
+# Configuration YouTube API
+youtube:
+  # Votre cle API YouTube (Google Cloud Console)
+  # https://console.cloud.google.com/apis/credentials
+  api-key: "AIzaSyADjv7gbO5h0SdHiVofQouldA64h12PP5Q"
+
+  # ID de votre chaine YouTube (pour detection automatique des lives)
+  # Trouvez-le sur: https://www.youtube.com/account_advanced
+  # Format: UCxxxxxxxxxxxxxxxxxx (24 caracteres)
+  channel-id: "UCjezM7oxQpcZmR542BfcmFw"
+
+  # Verifier automatiquement si la chaine est en live (en secondes, 0 = desactive)
+  auto-detect-interval: 30
+
+  # Intervalle de polling en secondes (min: 2, recommande: 3-5)
+  poll-interval: 3
+
+  # Nombre max de messages recuperes par requete
+  max-messages-per-poll: 200
+
+  # Intervalle de verification des likes/vues (en secondes)
+  like-check-interval: 10
+
+  # Palier de vues pour declencher un evenement (0 = desactive)
+  # Ex: 100 = evenement a 100, 200, 300 vues...
+  view-milestone: 100
+
+  # ============================================================
+  #                     PROVIDER SETTINGS
+  # ============================================================
+  # Le plugin supporte 2 methodes pour recuperer le chat:
+  #
+  # 1. InnerTube (RECOMMANDE): Simule un navigateur, 0 quota API!
+  # 2. Data API v3: Utilise votre cle API (10,000 unites/jour)
+  #
+  # Par defaut, InnerTube est utilise avec fallback sur Data API
+  # ============================================================
+
+  # Utiliser InnerTube en priorite (0 quota, recommande)
+  prefer-innertube: true
+
+  # Si InnerTube echoue, utiliser Data API v3 en fallback
+  fallback-to-api: true
+
+# Messages du plugin
+messages:
+  prefix: "&6[&eYouTube&6] &r"
+  connected: "&aConnecte au live YouTube!"
+  disconnected: "&cDeconnecte du live YouTube."
+  new-message: "&7%viewer%: &f%message%"
+  super-chat: "&6[SuperChat %amount%] &e%viewer%: &f%message%"
+
+# ============================================================
+#                         TRIGGERS
+# ============================================================
+# Les triggers definissent les actions a executer quand un
+# evenement YouTube se produit.
+#
+# Types d'actions disponibles:
+#   - SPAWN_MOB: Fait spawn un mob
+#   - GIVE_ITEM: Donne un item au joueur
+#   - EFFECT: Applique un effet de potion
+#   - WORLD_EVENT: Declenche un evenement monde
+#   - COMMAND: Execute une commande
+#   - BROADCAST: Envoie un message
+#   - SOUND: Joue un son
+#   - PARTICLE: Affiche des particules
+# ============================================================
+
+triggers:
+  # Declencheur pour les messages chat normaux
+  chat-message:
+    enabled: true
+    chance: 5  # 5% de chance par message
+    cooldown: 10  # Cooldown en secondes par viewer
+    actions:
+      - type: SPAWN_MOB
+        mob: ZOMBIE
+        amount: 1
+        radius: 5
+        name: "&c%viewer%"
+      - type: SOUND
+        sound: ENTITY_ZOMBIE_AMBIENT
+        volume: 1.0
+        pitch: 1.0
+
+  # Declencheur pour les Super Chats
+  super-chat:
+    enabled: true
+    actions:
+      # Petit Super Chat (moins de 5 euros)
+      - type: GIVE_ITEM
+        item: DIAMOND
+        amount: 1
+        display-name: "&bDiamant de %viewer%"
+
+      # Super Chat moyen (5-20 euros)
+      - type: SPAWN_MOB
+        mob: IRON_GOLEM
+        amount: 1
+        radius: 3
+        name: "&6Golem de %viewer%"
+        min-amount: 5.00
+
+      # Gros Super Chat (20+ euros)
+      - type: SPAWN_MOB
+        mob: WITHER
+        amount: 1
+        radius: 10
+        name: "&4WITHER de %viewer%"
+        min-amount: 20.00
+
+      - type: BROADCAST
+        broadcast-type: TITLE
+        message: "&6&lSUPER CHAT!"
+        subtitle: "&e%viewer% - %amount%"
+        broadcast: true
+
+  # Declencheur pour les Super Stickers
+  super-sticker:
+    enabled: true
+    actions:
+      - type: PARTICLE
+        particle: HEART
+        count: 50
+        offset-x: 2.0
+        offset-y: 2.0
+        offset-z: 2.0
+      - type: SOUND
+        sound: ENTITY_PLAYER_LEVELUP
+        broadcast: true
+
+  # Declencheur pour les nouveaux membres
+  new-member:
+    enabled: true
+    actions:
+      - type: BROADCAST
+        message: "&a&l[NOUVEAU MEMBRE] &e%viewer% &aa rejoint la chaine!"
+      - type: GIVE_ITEM
+        item: GOLDEN_APPLE
+        amount: 5
+        display-name: "&6Bienvenue %viewer%!"
+      - type: EFFECT
+        effect: REGENERATION
+        duration: 30
+        amplifier: 1
+      - type: WORLD_EVENT
+        event: LIGHTNING
+        radius: 0
+        damage: false
+        count: 1
+
+  # Declencheur pour les LIKES
+  like:
+    enabled: true
+    actions:
+      # Donne 100$ a tous les joueurs connectes
+      - type: COMMAND
+        command: "eco give * 100"
+        executor: CONSOLE
+      - type: BROADCAST
+        message: "&c❤ &f+1 Like! &aTous les joueurs recoivent &6100$&a!"
+      - type: PARTICLE
+        particle: HEART
+        count: 30
+        offset-x: 1.0
+        offset-y: 1.0
+        offset-z: 1.0
+      - type: SOUND
+        sound: ENTITY_EXPERIENCE_ORB_PICKUP
+        volume: 1.0
+        pitch: 1.5
+        broadcast: true
+
+  # Declencheur pour les paliers de vues (tous les X vues)
+  view-milestone:
+    enabled: true
+    actions:
+      - type: BROADCAST
+        broadcast-type: TITLE
+        message: "&a&l%message%"
+        subtitle: "&7Merci pour votre soutien!"
+        broadcast: true
+      - type: GIVE_ITEM
+        item: EMERALD
+        amount: 1
+        display-name: "&a%message%"
+      - type: SOUND
+        sound: UI_TOAST_CHALLENGE_COMPLETE
+        broadcast: true
+
+  # ============================================================
+  #                     MOTS-CLES (KEYWORDS)
+  # ============================================================
+  # Declenchent des actions quand un mot specifique est
+  # detecte dans le message du viewer.
+  # ============================================================
+
+  keywords:
+    # Quand quelqu'un ecrit "creeper" dans le chat
+    creeper:
+      enabled: true
+      chance: 50
+      cooldown: 30
+      actions:
+        - type: SPAWN_MOB
+          mob: CREEPER
+          amount: 3
+          radius: 5
+        - type: BROADCAST
+          type: ACTIONBAR
+          message: "&c%viewer% a invoque des Creepers!"
+
+    # Quand quelqu'un ecrit "tnt"
+    tnt:
+      enabled: true
+      chance: 25
+      cooldown: 60
+      actions:
+        - type: WORLD_EVENT
+          event: TNT
+          count: 3
+          radius: 5
+          fuse: 60
+
+    # Quand quelqu'un ecrit "heal"
+    heal:
+      enabled: true
+      chance: 100
+      cooldown: 120
+      actions:
+        - type: EFFECT
+          effect: REGENERATION
+          duration: 10
+          amplifier: 2
+        - type: EFFECT
+          effect: SATURATION
+          duration: 10
+          amplifier: 0
+
+    # Quand quelqu'un ecrit "storm"
+    storm:
+      enabled: true
+      chance: 30
+      cooldown: 300
+      actions:
+        - type: WORLD_EVENT
+          event: STORM
+        - type: BROADCAST
+          type: CHAT
+          message: "&8&l%viewer% &7a declenche une tempete!"
+
+    # Quand quelqu'un ecrit "boss"
+    boss:
+      enabled: true
+      chance: 10
+      cooldown: 600
+      actions:
+        - type: SPAWN_MOB
+          mob: WARDEN
+          amount: 1
+          radius: 10
+          name: "&4&lBOSS de %viewer%"
+        - type: BROADCAST
+          type: TITLE
+          message: "&4&lBOSS FIGHT!"
+          subtitle: "&cInvoque par %viewer%"
+          broadcast: true
+        - type: SOUND
+          sound: ENTITY_WITHER_SPAWN
+          broadcast: true
+
+    # Quand quelqu'un ecrit "diamond"
+    diamond:
+      enabled: true
+      chance: 5
+      cooldown: 60
+      actions:
+        - type: GIVE_ITEM
+          item: DIAMOND
+          amount: 1
+          display-name: "&bDiamant de %viewer%"
+          lore:
+            - "&7Offert par un viewer"
+            - "&7lors du live!"
+
+    # Quand quelqu'un ecrit "firework"
+    firework:
+      enabled: true
+      chance: 75
+      cooldown: 15
+      actions:
+        - type: COMMAND
+          command: "summon firework_rocket ~ ~5 ~ {LifeTime:20,FireworksItem:{id:firework_rocket,Count:1,tag:{Fireworks:{Flight:1,Explosions:[{Type:1,Colors:[I;16711680,16776960,65280]}]}}}}"
+          executor: CONSOLE
+
+# ============================================================
+#                  EXEMPLES D'ACTIONS
+# ============================================================
+#
+# SPAWN_MOB:
+#   - type: SPAWN_MOB
+#     mob: ZOMBIE          # Type d'entite
+#     amount: 1            # Nombre a spawn
+#     radius: 5            # Rayon autour du joueur
+#     name: "&cNom"        # Nom custom (optionnel)
+#     hostile: true        # Si le mob est hostile (defaut: true)
+#
+# GIVE_ITEM:
+#   - type: GIVE_ITEM
+#     item: DIAMOND        # Type d'item
+#     amount: 1            # Quantite
+#     display-name: "Nom"  # Nom custom (optionnel)
+#     drop: false          # Drop au sol au lieu d'inventaire
+#     lore:                # Description (optionnel)
+#       - "Ligne 1"
+#       - "Ligne 2"
+#     enchantments:        # Enchantements (optionnel)
+#       SHARPNESS: 5
+#       UNBREAKING: 3
+#
+# EFFECT:
+#   - type: EFFECT
+#     effect: SPEED        # Type d'effet
+#     duration: 10         # Duree en secondes
+#     amplifier: 1         # Niveau (0 = I, 1 = II, etc.)
+#     particles: true      # Afficher les particules
+#
+# WORLD_EVENT:
+#   - type: WORLD_EVENT
+#     event: LIGHTNING     # LIGHTNING, EXPLOSION, TNT, RAIN,
+#                          # STORM, CLEAR, DAY, NIGHT, FIRE, METEOR
+#     radius: 3            # Rayon (pour certains events)
+#     damage: true         # Faire des degats (optionnel)
+#     power: 2.0           # Puissance (explosions)
+#
+# COMMAND:
+#   - type: COMMAND
+#     command: "give %player% diamond 1"
+#     executor: CONSOLE    # CONSOLE, PLAYER, ou OP
+#     commands:            # Ou liste de commandes
+#       - "command1"
+#       - "command2"
+#
+# BROADCAST:
+#   - type: BROADCAST
+#     message: "&aMessage"
+#     type: CHAT           # CHAT, ACTIONBAR, TITLE, PLAYER
+#     subtitle: "..."      # Pour TITLE seulement
+#     broadcast: true      # Pour TITLE (tous les joueurs)
+#
+# SOUND:
+#   - type: SOUND
+#     sound: ENTITY_EXPERIENCE_ORB_PICKUP
+#     volume: 1.0
+#     pitch: 1.0
+#     broadcast: false     # Jouer pour tous les joueurs
+#
+# PARTICLE:
+#   - type: PARTICLE
+#     particle: HEART
+#     count: 10
+#     offset-x: 0.5
+#     offset-y: 0.5
+#     offset-z: 0.5
+#     speed: 0.1
+#
+# ============================================================
+#                     PLACEHOLDERS
+# ============================================================
+#
+# %viewer%       - Nom du viewer YouTube
+# %message%      - Message du viewer
+# %player%       - Nom du joueur cible (streamer)
+# %amount%       - Montant affiche (Super Chat)
+# %amount_value% - Valeur numerique du montant
+#
+# ============================================================

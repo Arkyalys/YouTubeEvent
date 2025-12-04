@@ -1,0 +1,21 @@
+name: YouTubeEvent
+version: ${project.version}
+main: fr.arkyalys.event.YouTubeEventPlugin
+api-version: "1.21"
+author: Arkyalys
+description: Connecte YouTube Live a Minecraft pour declencher des evenements in-game
+
+commands:
+  youtube:
+    description: Commande principale du plugin YouTubeEvent
+    usage: /<command> <start|stop|status|setkey|settarget|reload>
+    aliases: [yt, ytevent]
+    permission: youtubeevent.admin
+
+permissions:
+  youtubeevent.admin:
+    description: Acces a toutes les commandes YouTubeEvent
+    default: op
+  youtubeevent.use:
+    description: Commandes de base (status)
+    default: true
