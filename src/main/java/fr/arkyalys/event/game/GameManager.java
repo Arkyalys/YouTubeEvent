@@ -2,6 +2,7 @@ package fr.arkyalys.event.game;
 
 import fr.arkyalys.event.YouTubeEventPlugin;
 import fr.arkyalys.event.game.games.FeuilleGame;
+import fr.arkyalys.event.game.games.TNTLiveGame;
 import fr.arkyalys.event.youtube.models.ChatMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -16,6 +17,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 
 import org.bukkit.Location;
 
@@ -52,6 +54,7 @@ public class GameManager implements Listener {
      */
     private void registerDefaultGames() {
         registerGame(new FeuilleGame(plugin));
+        registerGame(new TNTLiveGame(plugin));
     }
 
     /**
@@ -195,9 +198,13 @@ public class GameManager implements Listener {
         for (int i = 0; i < newLikes; i++) {
             currentGame.handleYouTubeTrigger("like", "Viewer", String.valueOf(totalLikes));
 
-            // Si c'est l'event Feuille, activer le boost
+            // Actions spécifiques par event
             if (currentGame instanceof FeuilleGame feuilleGame) {
+                // Feuille: boost le tick speed
                 feuilleGame.triggerBoost();
+            } else if (currentGame instanceof TNTLiveGame tntLiveGame) {
+                // TNTLive: 1 flèche pour tous
+                tntLiveGame.giveLikeArrow();
             }
         }
     }
@@ -227,6 +234,28 @@ public class GameManager implements Listener {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 currentGame.eliminate(player);
             }, 1L);
+        }
+    }
+
+    /**
+     * Force le respawn des participants au spawn de retour (pas dans l'arène)
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        if (currentGame == null) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+
+        // Si le joueur était/est un participant, le faire respawn au spawn de retour
+        if (currentGame.isParticipant(player) || currentGame.getState() == GameState.RUNNING) {
+            if (returnSpawn != null) {
+                event.setRespawnLocation(returnSpawn);
+            } else {
+                // Fallback: spawn du monde principal
+                event.setRespawnLocation(Bukkit.getWorlds().get(0).getSpawnLocation());
+            }
         }
     }
 

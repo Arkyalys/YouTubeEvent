@@ -348,11 +348,6 @@ public abstract class GameEvent {
             return;
         }
 
-        // Ne pas éliminer les OP
-        if (player.isOp()) {
-            return;
-        }
-
         participants.remove(player.getUniqueId());
         eliminated.add(player.getUniqueId());
 
@@ -387,7 +382,7 @@ public abstract class GameEvent {
         List<Player> remaining = new ArrayList<>();
         for (UUID uuid : participants) {
             Player player = Bukkit.getPlayer(uuid);
-            if (player != null && player.isOnline() && !player.isOp()) {
+            if (player != null && player.isOnline()) {
                 remaining.add(player);
             }
         }

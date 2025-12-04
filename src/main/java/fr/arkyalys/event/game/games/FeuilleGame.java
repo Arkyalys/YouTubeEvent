@@ -36,11 +36,13 @@ public class FeuilleGame extends GameEvent implements Listener {
     private int boostTickSpeed = 300;      // Vitesse pendant le boost (like)
     private int boostDuration = 60;        // Durée du boost en ticks (3 secondes)
     private int defaultTickSpeed = 3;      // Vitesse par défaut de Minecraft (reset à la fin)
-    private List<String> regionNames = List.of("feuille"); // Régions WorldGuard pour régénérer
-    private Material leafMaterial = Material.OAK_LEAVES; // Type de feuille à régénérer
+    private List<String> regionNames;      // Régions WorldGuard pour régénérer (initialisé dans loadEventConfig)
+    private Material leafMaterial;         // Type de feuille à régénérer (initialisé dans loadEventConfig)
 
     // Runtime
     private BukkitTask boostTask;
+    private BukkitTask decayStartTask;
+    private final java.util.List<BukkitTask> countdownTasks = new java.util.ArrayList<>();
     private boolean boosted = false;
 
     public FeuilleGame(YouTubeEventPlugin plugin) {
@@ -103,15 +105,16 @@ public class FeuilleGame extends GameEvent implements Listener {
         defaultTickSpeed = config.getInt("feuille.default-tick-speed", 3);
 
         // Charger les régions (peut être une liste)
-        plugin.getLogger().info("[DEBUG] Config file: " + configFile.getAbsolutePath());
-        plugin.getLogger().info("[DEBUG] feuille.regions raw: " + config.get("feuille.regions"));
-        regionNames = config.getStringList("feuille.regions");
-        plugin.getLogger().info("[DEBUG] Régions chargées: " + regionNames + " (size=" + regionNames.size() + ")");
-        if (regionNames.isEmpty()) {
-            plugin.getLogger().warning("[DEBUG] Liste vide, utilisation du défaut 'feuille'");
+        // NOTE: Ne pas utiliser de field initializer car le constructeur parent
+        // appelle loadConfig() AVANT que les field initializers de la sous-classe s'exécutent
+        List<String> loadedRegions = config.getStringList("feuille.regions");
+        if (loadedRegions == null || loadedRegions.isEmpty()) {
             regionNames = List.of("feuille");
+            plugin.getLogger().warning("Aucune région configurée, utilisation du défaut 'feuille'");
+        } else {
+            regionNames = loadedRegions;
         }
-        plugin.getLogger().info("[DEBUG] Régions finales: " + regionNames);
+        plugin.getLogger().info("Régions WorldGuard chargées: " + regionNames);
 
         // Charger le type de feuille
         String leafType = config.getString("feuille.leaf-material", "OAK_LEAVES");
@@ -169,12 +172,18 @@ public class FeuilleGame extends GameEvent implements Listener {
     protected void onBegin() {
         plugin.getLogger().info("Event Feuille commence!");
 
-        // Rendre les feuilles non-persistantes pour qu'elles puissent decay
-        makeLeavesDecayable();
+        // Bloquer le tick speed à 0 pendant le countdown pour empêcher tout decay
+        World world = Bukkit.getWorld(worldName);
+        if (world != null) {
+            setRandomTickSpeed(world, 0);
+        }
 
-        // Démarrer la disparition des feuilles après un délai
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        // Démarrer la disparition des feuilles APRÈS le countdown
+        decayStartTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (state == GameState.RUNNING) {
+                // D'abord rendre les feuilles non-persistantes
+                makeLeavesDecayable();
+                // Puis activer le tick speed élevé
                 startLeafDecay();
             }
         }, leafDecayStartDelay);
@@ -230,11 +239,14 @@ public class FeuilleGame extends GameEvent implements Listener {
      * Affiche un countdown avant le début de la disparition
      */
     private void broadcastCountdown() {
+        // Clear les anciennes tâches
+        countdownTasks.clear();
+
         int seconds = leafDecayStartDelay / 20;
 
         for (int i = seconds; i > 0; i--) {
             final int count = i;
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (state == GameState.RUNNING) {
                     String message = "&e" + count + "...";
                     for (Player player : Bukkit.getOnlinePlayers()) {
@@ -247,10 +259,11 @@ public class FeuilleGame extends GameEvent implements Listener {
                     }
                 }
             }, (seconds - i) * 20L);
+            countdownTasks.add(task);
         }
 
         // Message final
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        BukkitTask finalTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (state == GameState.RUNNING) {
                 for (Player player : Bukkit.getOnlinePlayers()) {
                     player.sendTitle(
@@ -262,6 +275,7 @@ public class FeuilleGame extends GameEvent implements Listener {
                 }
             }
         }, leafDecayStartDelay);
+        countdownTasks.add(finalTask);
     }
 
     /**
@@ -430,9 +444,31 @@ public class FeuilleGame extends GameEvent implements Listener {
         }
     }
 
+    /**
+     * Annule toutes les tâches planifiées (countdown, decay start, boost)
+     */
+    private void cancelAllTasks() {
+        // Annuler le boost
+        cancelBoostTask();
+
+        // Annuler la tâche de démarrage du decay
+        if (decayStartTask != null) {
+            decayStartTask.cancel();
+            decayStartTask = null;
+        }
+
+        // Annuler toutes les tâches de countdown
+        for (BukkitTask task : countdownTasks) {
+            if (task != null) {
+                task.cancel();
+            }
+        }
+        countdownTasks.clear();
+    }
+
     @Override
     protected void onStop() {
-        cancelBoostTask();
+        cancelAllTasks();
         resetRandomTickSpeed();
         regenerateLeaves();
         plugin.getLogger().info("Event Feuille arrêté!");
@@ -457,16 +493,33 @@ public class FeuilleGame extends GameEvent implements Listener {
 
     @Override
     protected void onWin(Player winner) {
-        cancelBoostTask();
+        // 1. Arrêter immédiatement toutes les tâches et le decay des feuilles
+        cancelAllTasks();
         resetRandomTickSpeed();
-        regenerateLeaves();
+        plugin.getLogger().info("Victoire! RandomTickSpeed remis à " + defaultTickSpeed);
 
-        // Feux d'artifice pour le gagnant
-        Location loc = winner.getLocation();
+        // 2. Régénérer les feuilles
+        regenerateLeaves();
+        plugin.getLogger().info("Arène réinitialisée - feuilles régénérées");
+
+        // 3. Titre de victoire pour tous
+        String winnerName = winner.getName();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.sendTitle(
+                    ChatColor.translateAlternateColorCodes('&', "&6&l" + winnerName + " GAGNE!"),
+                    ChatColor.translateAlternateColorCodes('&', "&aFélicitations au vainqueur!"),
+                    10, 70, 20
+            );
+            player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1f);
+        }
+
+        // 4. Feux d'artifice pour le gagnant
+        Location loc = winner.getLocation().clone();
         for (int i = 0; i < 5; i++) {
+            final Location fireworkLoc = loc.clone().add(0, 2, 0);
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                loc.getWorld().playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 1f, 1f);
-                loc.getWorld().spawnParticle(Particle.FIREWORK, loc.add(0, 2, 0), 50, 1, 1, 1, 0.1);
+                fireworkLoc.getWorld().playSound(fireworkLoc, Sound.ENTITY_FIREWORK_ROCKET_LAUNCH, 1f, 1f);
+                fireworkLoc.getWorld().spawnParticle(Particle.FIREWORK, fireworkLoc, 50, 1, 1, 1, 0.1);
             }, i * 20L);
         }
     }

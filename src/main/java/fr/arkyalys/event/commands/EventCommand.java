@@ -5,6 +5,8 @@ import fr.arkyalys.event.game.GameEvent;
 import fr.arkyalys.event.game.GameManager;
 import fr.arkyalys.event.game.GameState;
 import fr.arkyalys.event.game.games.FeuilleGame;
+import fr.arkyalys.event.game.games.TNTLiveGame;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -48,6 +50,9 @@ public class EventCommand implements CommandExecutor, TabCompleter {
             case "reset" -> handleReset(sender, args);
             case "status" -> handleStatus(sender);
             case "reload" -> handleReload(sender);
+            case "setstreamer" -> handleSetStreamer(sender, args);
+            case "setstuff" -> handleSetStuff(sender, args);
+            case "setorigin" -> handleSetOrigin(sender, args);
             case "help" -> sendHelp(sender);
             default -> {
                 sender.sendMessage((prefix + "&cCommande inconnue. Utilisez /event help").replace("&", "§"));
@@ -232,7 +237,7 @@ public class EventCommand implements CommandExecutor, TabCompleter {
     }
 
     /**
-     * /event setspawn <event|spawn>
+     * /event setspawn <event|spawn> [streamer|sub]
      */
     private void handleSetSpawn(CommandSender sender, String[] args) {
         if (!hasPermission(sender, "youtubeevent.event.admin")) return;
@@ -243,8 +248,9 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length < 2) {
-            sender.sendMessage((prefix + "&cUtilisation: /event setspawn <nom_event|spawn>").replace("&", "§"));
+            sender.sendMessage((prefix + "&cUtilisation: /event setspawn <nom_event|spawn> [streamer|sub]").replace("&", "§"));
             sender.sendMessage((prefix + "&7spawn = spawn de retour (leave/elimination)").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Pour TNTLive: /event setspawn tntlive streamer|sub").replace("&", "§"));
             return;
         }
 
@@ -267,6 +273,27 @@ public class EventCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        // TNTLive: spawns par équipe
+        if (game instanceof TNTLiveGame tntLiveGame) {
+            if (args.length < 3) {
+                sender.sendMessage((prefix + "&cUtilisation: /event setspawn tntlive <streamer|sub>").replace("&", "§"));
+                return;
+            }
+
+            String team = args[2].toLowerCase();
+            if (team.equals("streamer")) {
+                tntLiveGame.setStreamerSpawn(player.getLocation());
+                sender.sendMessage((prefix + "&aSpawn du &6STREAMER &adéfini!").replace("&", "§"));
+            } else if (team.equals("sub")) {
+                tntLiveGame.setSubSpawn(player.getLocation());
+                sender.sendMessage((prefix + "&aSpawn des &cSUBS &adéfini!").replace("&", "§"));
+            } else {
+                sender.sendMessage((prefix + "&cÉquipe invalide. Utilisez: streamer ou sub").replace("&", "§"));
+            }
+            return;
+        }
+
+        // Autres events: spawn unique
         game.setSpawn(player.getLocation());
         sender.sendMessage((prefix + "&aSpawn de l'event &6" + game.getDisplayName() +
                 " &adéfini à votre position!").replace("&", "§"));
@@ -295,9 +322,137 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         if (game instanceof FeuilleGame feuilleGame) {
             feuilleGame.resetLeaves();
             sender.sendMessage((prefix + "&aFeuilles de l'event &6" + game.getDisplayName() + " &aréinitialisées!").replace("&", "§"));
+        } else if (game instanceof TNTLiveGame tntLiveGame) {
+            // Recharger la config du schematic (au cas où elle a été modifiée)
+            tntLiveGame.reloadSchematicConfig();
+
+            // Afficher les infos de debug
+            sender.sendMessage((prefix + "&7Schematic: &f" + tntLiveGame.getSchematicName()).replace("&", "§"));
+            sender.sendMessage((prefix + "&7Origine: &f" + (tntLiveGame.getSchematicOrigin() != null ?
+                tntLiveGame.getSchematicOrigin().toString() : "NON DÉFINIE")).replace("&", "§"));
+
+            if (tntLiveGame.getSchematicOrigin() == null) {
+                sender.sendMessage((prefix + "&cErreur: Origine non définie! Utilisez /event setorigin tntlive").replace("&", "§"));
+                return;
+            }
+
+            sender.sendMessage((prefix + "&7Paste du schematic en cours...").replace("&", "§"));
+            tntLiveGame.pasteSchematic();
+            sender.sendMessage((prefix + "&aMap TNTLive réinitialisée!").replace("&", "§"));
         } else {
             sender.sendMessage((prefix + "&eCet event n'a pas de fonction de reset.").replace("&", "§"));
         }
+    }
+
+    /**
+     * /event setstreamer <player>
+     * Définit le streamer pour l'event TNTLive
+     */
+    private void handleSetStreamer(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        if (args.length < 2) {
+            sender.sendMessage((prefix + "&cUtilisation: /event setstreamer <joueur>").replace("&", "§"));
+            return;
+        }
+
+        // Récupérer le joueur
+        Player target = Bukkit.getPlayer(args[1]);
+        if (target == null) {
+            sender.sendMessage((prefix + "&cJoueur introuvable: " + args[1]).replace("&", "§"));
+            return;
+        }
+
+        // Récupérer l'event TNTLive
+        GameEvent game = plugin.getGameManager().getGame("tntlive");
+        if (!(game instanceof TNTLiveGame tntLiveGame)) {
+            sender.sendMessage((prefix + "&cEvent TNTLive introuvable!").replace("&", "§"));
+            return;
+        }
+
+        tntLiveGame.setStreamer(target);
+        sender.sendMessage((prefix + "&a" + target.getName() + " &7est maintenant le &6STREAMER &7pour TNTLive!").replace("&", "§"));
+    }
+
+    /**
+     * /event setstuff <event> <team>
+     * Sauvegarde l'inventaire actuel comme stuff d'une équipe
+     */
+    private void handleSetStuff(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage((prefix + "&cCette commande doit être exécutée par un joueur.").replace("&", "§"));
+            return;
+        }
+
+        if (args.length < 3) {
+            sender.sendMessage((prefix + "&cUtilisation: /event setstuff tntlive <streamer|sub>").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Votre inventaire actuel sera sauvegardé.").replace("&", "§"));
+            return;
+        }
+
+        String gameName = args[1].toLowerCase();
+        String team = args[2].toLowerCase();
+
+        // Pour l'instant, seul TNTLive supporte cette commande
+        if (!gameName.equals("tntlive")) {
+            sender.sendMessage((prefix + "&cSeul l'event TNTLive supporte cette commande.").replace("&", "§"));
+            return;
+        }
+
+        GameEvent game = plugin.getGameManager().getGame("tntlive");
+        if (!(game instanceof TNTLiveGame tntLiveGame)) {
+            sender.sendMessage((prefix + "&cEvent TNTLive introuvable!").replace("&", "§"));
+            return;
+        }
+
+        if (team.equals("streamer")) {
+            tntLiveGame.saveStreamerStuff(player);
+            sender.sendMessage((prefix + "&aStuff du &6STREAMER &asauvegardé depuis votre inventaire!").replace("&", "§"));
+        } else if (team.equals("sub")) {
+            tntLiveGame.saveSubStuff(player);
+            sender.sendMessage((prefix + "&aStuff des &cSUBS &asauvegardé depuis votre inventaire!").replace("&", "§"));
+        } else {
+            sender.sendMessage((prefix + "&cÉquipe invalide. Utilisez: streamer ou sub").replace("&", "§"));
+        }
+    }
+
+    /**
+     * /event setorigin <event>
+     * Définit l'origine du schematic à la position actuelle
+     */
+    private void handleSetOrigin(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage((prefix + "&cCette commande doit être exécutée par un joueur.").replace("&", "§"));
+            return;
+        }
+
+        if (args.length < 2) {
+            sender.sendMessage((prefix + "&cUtilisation: /event setorigin tntlive").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Votre position sera l'origine du schematic.").replace("&", "§"));
+            return;
+        }
+
+        String gameName = args[1].toLowerCase();
+
+        // Pour l'instant, seul TNTLive supporte cette commande
+        if (!gameName.equals("tntlive")) {
+            sender.sendMessage((prefix + "&cSeul l'event TNTLive supporte cette commande.").replace("&", "§"));
+            return;
+        }
+
+        GameEvent game = plugin.getGameManager().getGame("tntlive");
+        if (!(game instanceof TNTLiveGame tntLiveGame)) {
+            sender.sendMessage((prefix + "&cEvent TNTLive introuvable!").replace("&", "§"));
+            return;
+        }
+
+        tntLiveGame.setSchematicOrigin(player.getLocation());
+        sender.sendMessage((prefix + "&aOrigine du schematic définie à votre position!").replace("&", "§"));
+        sender.sendMessage((prefix + "&7Le schematic sera collé ici à la fin de l'event.").replace("&", "§"));
     }
 
     /**
@@ -347,9 +502,14 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("&e/event join &7- Rejoindre l'event".replace("&", "§"));
         sender.sendMessage("&e/event leave &7- Quitter l'event".replace("&", "§"));
         sender.sendMessage("&e/event setspawn <event|spawn> &7- Définir le spawn".replace("&", "§"));
-        sender.sendMessage("&e/event reset <event> &7- Reset l'event (feuilles, etc.)".replace("&", "§"));
+        sender.sendMessage("&e/event reset <event> &7- Reset l'event".replace("&", "§"));
         sender.sendMessage("&e/event status &7- Voir le statut".replace("&", "§"));
         sender.sendMessage("&e/event reload &7- Recharger les configs".replace("&", "§"));
+        sender.sendMessage("&6---------- &eTNTLive &6----------".replace("&", "§"));
+        sender.sendMessage("&e/event setstreamer <joueur> &7- Définir le streamer".replace("&", "§"));
+        sender.sendMessage("&e/event setstuff tntlive <streamer|sub> &7- Sauver le stuff".replace("&", "§"));
+        sender.sendMessage("&e/event setspawn tntlive <streamer|sub> &7- Spawns équipes".replace("&", "§"));
+        sender.sendMessage("&e/event setorigin tntlive &7- Origine du schematic".replace("&", "§"));
         sender.sendMessage("&6========================================".replace("&", "§"));
     }
 
@@ -379,7 +539,8 @@ public class EventCommand implements CommandExecutor, TabCompleter {
 
             // Commandes admin
             if (sender.hasPermission("youtubeevent.event.admin")) {
-                subCommands.addAll(Arrays.asList("start", "begin", "stop", "list", "setspawn", "reset", "reload"));
+                subCommands.addAll(Arrays.asList("start", "begin", "stop", "list", "setspawn", "reset", "reload",
+                        "setstreamer", "setstuff", "setorigin"));
             }
 
             // Commandes joueur
@@ -393,16 +554,16 @@ public class EventCommand implements CommandExecutor, TabCompleter {
             }
         } else if (args.length == 2) {
             String subCommand = args[0].toLowerCase();
+            String current = args[1].toLowerCase();
 
-            if (subCommand.equals("start")) {
-                String current = args[1].toLowerCase();
+            if (subCommand.equals("start") || subCommand.equals("reset") ||
+                subCommand.equals("setstuff") || subCommand.equals("setorigin")) {
                 for (GameEvent game : plugin.getGameManager().getGames()) {
                     if (game.getName().startsWith(current)) {
                         completions.add(game.getName());
                     }
                 }
             } else if (subCommand.equals("setspawn")) {
-                String current = args[1].toLowerCase();
                 // Ajouter "spawn" pour le spawn de retour
                 if ("spawn".startsWith(current)) {
                     completions.add("spawn");
@@ -413,13 +574,23 @@ public class EventCommand implements CommandExecutor, TabCompleter {
                         completions.add(game.getName());
                     }
                 }
-            } else if (subCommand.equals("reset")) {
-                String current = args[1].toLowerCase();
-                for (GameEvent game : plugin.getGameManager().getGames()) {
-                    if (game.getName().startsWith(current)) {
-                        completions.add(game.getName());
+            } else if (subCommand.equals("setstreamer")) {
+                // Complétion des joueurs en ligne
+                for (Player player : Bukkit.getOnlinePlayers()) {
+                    if (player.getName().toLowerCase().startsWith(current)) {
+                        completions.add(player.getName());
                     }
                 }
+            }
+        } else if (args.length == 3) {
+            String subCommand = args[0].toLowerCase();
+            String current = args[2].toLowerCase();
+
+            // Pour setspawn tntlive et setstuff tntlive: streamer|sub
+            if ((subCommand.equals("setspawn") || subCommand.equals("setstuff"))
+                && args[1].equalsIgnoreCase("tntlive")) {
+                if ("streamer".startsWith(current)) completions.add("streamer");
+                if ("sub".startsWith(current)) completions.add("sub");
             }
         }
 
