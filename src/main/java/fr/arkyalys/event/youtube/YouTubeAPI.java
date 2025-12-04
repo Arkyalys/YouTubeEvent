@@ -41,6 +41,9 @@ public class YouTubeAPI {
     private boolean preferInnerTube = true;
     private boolean fallbackToDataAPI = true;
 
+    // Anti-spam pour les erreurs de quota
+    private boolean quotaErrorLogged = false;
+
     public YouTubeAPI(YouTubeEventPlugin plugin) {
         this.plugin = plugin;
         this.httpClient = new OkHttpClient.Builder()
@@ -273,29 +276,44 @@ public class YouTubeAPI {
     }
 
     /**
-     * Gère les erreurs API
+     * Gère les erreurs API (anti-spam pour quota)
      */
     private void handleApiError(String body) {
         try {
             JsonObject json = JsonParser.parseString(body).getAsJsonObject();
             JsonObject error = json.getAsJsonObject("error");
             if (error != null) {
-                String message = error.get("message").getAsString();
-                plugin.getLogger().warning("Erreur API: " + message);
-
                 if (error.has("errors")) {
                     for (JsonElement e : error.getAsJsonArray("errors")) {
                         JsonObject err = e.getAsJsonObject();
                         String reason = err.get("reason").getAsString();
                         if ("quotaExceeded".equals(reason) || "dailyLimitExceeded".equals(reason)) {
-                            plugin.getLogger().warning("Quota API epuise! Utilisez InnerTube.");
+                            // Ne logger qu'une seule fois
+                            if (!quotaErrorLogged) {
+                                quotaErrorLogged = true;
+                                plugin.getLogger().warning("Quota API YouTube epuise! Le plugin utilisera InnerTube uniquement.");
+                                plugin.getLogger().warning("Le quota se reset a 9h (heure FR). Desactivez auto-detect si besoin.");
+                                // Desactiver le fallback pour eviter de re-essayer l'API
+                                fallbackToDataAPI = false;
+                            }
+                            return;
                         }
                     }
                 }
+                // Autres erreurs (non quota) - logger normalement
+                String message = error.get("message").getAsString();
+                plugin.getLogger().warning("Erreur API: " + message);
             }
         } catch (Exception e) {
             // Ignore
         }
+    }
+
+    /**
+     * Reset le flag d'erreur de quota (appelé quand le quota est reset)
+     */
+    public void resetQuotaError() {
+        quotaErrorLogged = false;
     }
 
     // ============================================================

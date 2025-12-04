@@ -18,7 +18,7 @@ youtube:
   channel-id: "UCjezM7oxQpcZmR542BfcmFw"
 
   # Verifier automatiquement si la chaine est en live (en secondes, 0 = desactive)
-  auto-detect-interval: 30
+  auto-detect-interval: 0
 
   # Intervalle de polling en secondes (min: 2, recommande: 3-5)
   poll-interval: 3
