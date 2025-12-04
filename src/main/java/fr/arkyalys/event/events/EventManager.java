@@ -1,9 +1,11 @@
 package fr.arkyalys.event.events;
 
 import fr.arkyalys.event.YouTubeEventPlugin;
+import fr.arkyalys.event.api.events.*;
 import fr.arkyalys.event.config.ConfigManager;
 import fr.arkyalys.event.events.triggers.*;
 import fr.arkyalys.event.youtube.models.ChatMessage;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.util.HashMap;
@@ -52,6 +54,17 @@ public class EventManager {
      * Traite un message YouTube et déclenche les événements appropriés
      */
     public void handleMessage(ChatMessage message) {
+        String liveId = plugin.getLiveChatPoller().getCurrentLiveId();
+
+        // Déclencher l'événement Bukkit général (pour tous les messages)
+        YouTubeChatMessageEvent chatEvent = new YouTubeChatMessageEvent(liveId, message);
+        Bukkit.getPluginManager().callEvent(chatEvent);
+
+        // Si annulé par un autre plugin, ne pas traiter
+        if (chatEvent.isCancelled()) {
+            return;
+        }
+
         Player target = plugin.getTargetPlayer();
         if (target == null || !target.isOnline()) {
             return; // Pas de joueur cible
@@ -66,15 +79,15 @@ public class EventManager {
                 break;
 
             case SUPER_CHAT:
-                handleSuperChat(message, target, config);
+                handleSuperChat(message, target, config, liveId);
                 break;
 
             case SUPER_STICKER:
-                handleSuperSticker(message, target, config);
+                handleSuperSticker(message, target, config, liveId);
                 break;
 
             case NEW_MEMBER:
-                handleNewMember(message, target, config);
+                handleNewMember(message, target, config, liveId);
                 break;
         }
 
@@ -99,7 +112,12 @@ public class EventManager {
     /**
      * Gère un Super Chat
      */
-    private void handleSuperChat(ChatMessage message, Player target, ConfigManager config) {
+    private void handleSuperChat(ChatMessage message, Player target, ConfigManager config, String liveId) {
+        // Déclencher l'événement Bukkit spécifique
+        YouTubeSuperChatEvent superChatEvent = new YouTubeSuperChatEvent(liveId, message);
+        Bukkit.getPluginManager().callEvent(superChatEvent);
+        if (superChatEvent.isCancelled()) return;
+
         ConfigManager.TriggerConfig triggerConfig = config.getTrigger("super-chat");
         if (triggerConfig == null || !triggerConfig.enabled) return;
 
@@ -116,7 +134,12 @@ public class EventManager {
     /**
      * Gère un Super Sticker
      */
-    private void handleSuperSticker(ChatMessage message, Player target, ConfigManager config) {
+    private void handleSuperSticker(ChatMessage message, Player target, ConfigManager config, String liveId) {
+        // Déclencher l'événement Bukkit spécifique (utilise le même event que SuperChat)
+        YouTubeSuperChatEvent superChatEvent = new YouTubeSuperChatEvent(liveId, message);
+        Bukkit.getPluginManager().callEvent(superChatEvent);
+        if (superChatEvent.isCancelled()) return;
+
         ConfigManager.TriggerConfig triggerConfig = config.getTrigger("super-sticker");
         if (triggerConfig == null || !triggerConfig.enabled) return;
 
@@ -126,7 +149,12 @@ public class EventManager {
     /**
      * Gère un nouveau membre
      */
-    private void handleNewMember(ChatMessage message, Player target, ConfigManager config) {
+    private void handleNewMember(ChatMessage message, Player target, ConfigManager config, String liveId) {
+        // Déclencher l'événement Bukkit spécifique
+        YouTubeNewMemberEvent newMemberEvent = new YouTubeNewMemberEvent(liveId, message);
+        Bukkit.getPluginManager().callEvent(newMemberEvent);
+        if (newMemberEvent.isCancelled()) return;
+
         ConfigManager.TriggerConfig triggerConfig = config.getTrigger("new-member");
         if (triggerConfig == null || !triggerConfig.enabled) return;
 
@@ -137,6 +165,13 @@ public class EventManager {
      * Gère les nouveaux likes
      */
     public void handleLike(long newLikes, long totalLikes) {
+        String liveId = plugin.getLiveChatPoller().getCurrentLiveId();
+
+        // Déclencher l'événement Bukkit
+        YouTubeLikeEvent likeEvent = new YouTubeLikeEvent(liveId, newLikes, totalLikes);
+        Bukkit.getPluginManager().callEvent(likeEvent);
+        if (likeEvent.isCancelled()) return;
+
         Player target = plugin.getTargetPlayer();
         if (target == null || !target.isOnline()) return;
 
@@ -162,6 +197,14 @@ public class EventManager {
      * Gère les paliers de vues
      */
     public void handleViewMilestone(long viewCount) {
+        String liveId = plugin.getLiveChatPoller().getCurrentLiveId();
+        int milestone = plugin.getConfigManager().getViewMilestone();
+
+        // Déclencher l'événement Bukkit
+        YouTubeViewMilestoneEvent viewEvent = new YouTubeViewMilestoneEvent(liveId, viewCount, milestone);
+        Bukkit.getPluginManager().callEvent(viewEvent);
+        if (viewEvent.isCancelled()) return;
+
         Player target = plugin.getTargetPlayer();
         if (target == null || !target.isOnline()) return;
 

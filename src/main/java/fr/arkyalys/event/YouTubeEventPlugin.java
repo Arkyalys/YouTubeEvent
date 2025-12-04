@@ -1,5 +1,7 @@
 package fr.arkyalys.event;
 
+import fr.arkyalys.event.api.YouTubeEventAPI;
+import fr.arkyalys.event.api.events.YouTubeConnectionEvent;
 import fr.arkyalys.event.commands.YouTubeCommand;
 import fr.arkyalys.event.config.ConfigManager;
 import fr.arkyalys.event.display.YouTubeDisplay;
@@ -13,7 +15,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.UUID;
-import java.util.logging.Level;
 
 public class YouTubeEventPlugin extends JavaPlugin {
 
@@ -55,12 +56,16 @@ public class YouTubeEventPlugin extends JavaPlugin {
         getCommand("youtube").setExecutor(new YouTubeCommand(this));
         getCommand("yt").setExecutor(new YouTubeCommand(this));
 
+        // Initialiser l'API publique
+        YouTubeEventAPI.init(this);
+
         getLogger().info("========================================");
         getLogger().info("  YouTubeEvent v" + getDescription().getVersion());
         getLogger().info("  Plugin charge avec succes!");
         getLogger().info("----------------------------------------");
         getLogger().info("  Provider: " + (configManager.isPreferInnerTube() ? "InnerTube (0 quota)" : "Data API v3"));
         getLogger().info("  Fallback: " + (configManager.isFallbackToDataAPI() ? "Actif" : "Desactive"));
+        getLogger().info("  API: Disponible pour les autres plugins");
         getLogger().info("========================================");
 
         // Vérifier la configuration

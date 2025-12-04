@@ -1,6 +1,7 @@
 package fr.arkyalys.event.youtube;
 
 import fr.arkyalys.event.YouTubeEventPlugin;
+import fr.arkyalys.event.api.events.YouTubeConnectionEvent;
 import fr.arkyalys.event.youtube.models.ChatMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitTask;
@@ -72,6 +73,14 @@ public class LiveChatPoller {
                         // Démarrer le polling
                         startPolling();
 
+                        // Déclencher l'événement de connexion Bukkit
+                        YouTubeConnectionEvent connectionEvent = new YouTubeConnectionEvent(
+                                currentLiveId,
+                                YouTubeConnectionEvent.ConnectionState.CONNECTED,
+                                providerName
+                        );
+                        Bukkit.getPluginManager().callEvent(connectionEvent);
+
                         // Notifier le joueur cible
                         if (plugin.getTargetPlayer() != null) {
                             plugin.getTargetPlayer().sendMessage(
@@ -89,6 +98,8 @@ public class LiveChatPoller {
      * Arrête le polling
      */
     public void stop() {
+        String disconnectedLiveId = currentLiveId;
+
         if (pollTask != null) {
             pollTask.cancel();
             pollTask = null;
@@ -100,6 +111,16 @@ public class LiveChatPoller {
         running = false;
 
         plugin.getLogger().info("Deconnecte du live YouTube.");
+
+        // Déclencher l'événement de déconnexion Bukkit
+        if (disconnectedLiveId != null) {
+            YouTubeConnectionEvent connectionEvent = new YouTubeConnectionEvent(
+                    disconnectedLiveId,
+                    YouTubeConnectionEvent.ConnectionState.DISCONNECTED,
+                    "Déconnecté"
+            );
+            Bukkit.getPluginManager().callEvent(connectionEvent);
+        }
 
         // Notifier le joueur cible
         if (plugin.getTargetPlayer() != null) {
