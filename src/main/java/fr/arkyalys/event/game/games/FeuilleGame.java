@@ -156,9 +156,15 @@ public class FeuilleGame extends GameEvent implements Listener {
 
     @Override
     protected void onOpen() {
+        // S'assurer que le tickspeed est à 0 avant de regen
+        World world = Bukkit.getWorld(worldName);
+        if (world != null) {
+            setRandomTickSpeed(world, 0);
+        }
+
         // Reset les feuilles à l'ouverture
         regenerateLeaves();
-        plugin.getLogger().info("Event Feuille ouvert!");
+        plugin.getLogger().info("Event Feuille ouvert! (tickspeed=0 jusqu'au begin)");
     }
 
     /**
@@ -469,9 +475,19 @@ public class FeuilleGame extends GameEvent implements Listener {
     @Override
     protected void onStop() {
         cancelAllTasks();
-        resetRandomTickSpeed();
+
+        // D'abord bloquer le decay (0) pour éviter toute perte pendant la regen
+        World world = Bukkit.getWorld(worldName);
+        if (world != null) {
+            setRandomTickSpeed(world, 0);
+        }
+
+        // Régénérer les feuilles (seront persistantes)
         regenerateLeaves();
-        plugin.getLogger().info("Event Feuille arrêté!");
+
+        // Garder à 0 entre les events pour être safe
+        // (les feuilles sont persistantes mais on reste prudent)
+        plugin.getLogger().info("Event Feuille arrêté! RandomTickSpeed maintenu à 0.");
     }
 
     @Override
@@ -493,14 +509,19 @@ public class FeuilleGame extends GameEvent implements Listener {
 
     @Override
     protected void onWin(Player winner) {
-        // 1. Arrêter immédiatement toutes les tâches et le decay des feuilles
+        // 1. Arrêter immédiatement toutes les tâches
         cancelAllTasks();
-        resetRandomTickSpeed();
-        plugin.getLogger().info("Victoire! RandomTickSpeed remis à " + defaultTickSpeed);
 
-        // 2. Régénérer les feuilles
+        // 2. Bloquer le decay AVANT de régénérer
+        World world = Bukkit.getWorld(worldName);
+        if (world != null) {
+            setRandomTickSpeed(world, 0);
+        }
+        plugin.getLogger().info("Victoire! RandomTickSpeed mis à 0 pour regen.");
+
+        // 3. Régénérer les feuilles (seront persistantes)
         regenerateLeaves();
-        plugin.getLogger().info("Arène réinitialisée - feuilles régénérées");
+        plugin.getLogger().info("Arène réinitialisée - feuilles régénérées, tickspeed reste à 0.");
 
         // 3. Titre de victoire pour tous
         String winnerName = winner.getName();
