@@ -32,18 +32,15 @@ public class FeuilleGame extends GameEvent implements Listener {
 
     // Config spécifique
     private int leafDecayStartDelay = 100; // Délai avant le début de la disparition (5 secondes)
-    private int normalTickSpeed = 100;     // Vitesse normale pendant l'event
-    private int boostTickSpeed = 300;      // Vitesse pendant le boost (like)
-    private int boostDuration = 60;        // Durée du boost en ticks (3 secondes)
-    private int defaultTickSpeed = 3;      // Vitesse par défaut de Minecraft (reset à la fin)
+    private int startTickSpeed = 3;        // Vitesse au début de l'event (après countdown)
+    private int likeTickSpeedBonus = 1;    // Bonus de tickspeed par like (+1)
     private List<String> regionNames;      // Régions WorldGuard pour régénérer (initialisé dans loadEventConfig)
     private Material leafMaterial;         // Type de feuille à régénérer (initialisé dans loadEventConfig)
 
     // Runtime
-    private BukkitTask boostTask;
     private BukkitTask decayStartTask;
     private final java.util.List<BukkitTask> countdownTasks = new java.util.ArrayList<>();
-    private boolean boosted = false;
+    private int currentTickSpeed = 0;      // Tickspeed actuel (accumule avec les likes)
 
     public FeuilleGame(YouTubeEventPlugin plugin) {
         super(plugin, "feuille");
@@ -99,10 +96,8 @@ public class FeuilleGame extends GameEvent implements Listener {
     @Override
     protected void loadEventConfig(YamlConfiguration config) {
         leafDecayStartDelay = config.getInt("feuille.start-delay", 100);
-        normalTickSpeed = config.getInt("feuille.normal-tick-speed", 100);
-        boostTickSpeed = config.getInt("feuille.boost-tick-speed", 300);
-        boostDuration = config.getInt("feuille.boost-duration", 60);
-        defaultTickSpeed = config.getInt("feuille.default-tick-speed", 3);
+        startTickSpeed = config.getInt("feuille.start-tick-speed", 3);
+        likeTickSpeedBonus = config.getInt("feuille.like-tick-bonus", 1);
 
         // Charger les régions (peut être une liste)
         // NOTE: Ne pas utiliser de field initializer car le constructeur parent
@@ -128,11 +123,9 @@ public class FeuilleGame extends GameEvent implements Listener {
 
     @Override
     protected void saveDefaultEventConfig(YamlConfiguration config) {
-        config.set("feuille.start-delay", 100);           // 5 sec avant début
-        config.set("feuille.normal-tick-speed", 100);     // Vitesse normale pendant event
-        config.set("feuille.boost-tick-speed", 300);      // Vitesse pendant boost (like)
-        config.set("feuille.boost-duration", 60);         // 3 sec de boost par like
-        config.set("feuille.default-tick-speed", 3);      // Vitesse Minecraft par défaut (reset)
+        config.set("feuille.start-delay", 100);           // 5 sec avant début (en ticks)
+        config.set("feuille.start-tick-speed", 3);        // Tickspeed au début (après countdown)
+        config.set("feuille.like-tick-bonus", 1);         // +1 tickspeed par like
         config.set("feuille.regions", List.of("feuille1", "feuille2")); // Régions WorldGuard à régénérer
         config.set("feuille.leaf-material", "OAK_LEAVES");// Type de feuille à régénérer
 
@@ -294,17 +287,15 @@ public class FeuilleGame extends GameEvent implements Listener {
             return;
         }
 
-        // Reset boost
-        boosted = false;
-        cancelBoostTask();
-
-        // Activer le randomTickSpeed élevé sur le monde feuille
-        setRandomTickSpeed(world, normalTickSpeed);
-        plugin.getLogger().info("RandomTickSpeed du monde '" + worldName + "' réglé à " + normalTickSpeed);
+        // Démarrer avec le tickspeed de base
+        currentTickSpeed = startTickSpeed;
+        setRandomTickSpeed(world, currentTickSpeed);
+        plugin.getLogger().info("RandomTickSpeed du monde '" + worldName + "' réglé à " + currentTickSpeed);
     }
 
     /**
-     * Active le boost de vitesse de disparition (appelé par les likes YouTube)
+     * Augmente le tickspeed de +1 (appelé par les likes YouTube)
+     * Les likes s'accumulent!
      */
     public void triggerBoost() {
         if (state != GameState.RUNNING) return;
@@ -312,34 +303,24 @@ public class FeuilleGame extends GameEvent implements Listener {
         World world = Bukkit.getWorld(worldName);
         if (world == null) return;
 
-        // Activer le boost
-        boosted = true;
-        setRandomTickSpeed(world, boostTickSpeed);
-
-        // Annuler le précédent timer de boost si existant
-        cancelBoostTask();
+        // Augmenter le tickspeed (permanent, pas temporaire!)
+        currentTickSpeed += likeTickSpeedBonus;
+        setRandomTickSpeed(world, currentTickSpeed);
 
         // Effet visuel pour tous les participants
         for (UUID uuid : participants) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
-                player.playSound(player.getLocation(), Sound.ENTITY_WITHER_SPAWN, 0.3f, 2f);
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f);
                 player.sendTitle(
-                        ChatColor.translateAlternateColorCodes('&', "&c&l⚡ BOOST ⚡"),
-                        ChatColor.translateAlternateColorCodes('&', "&7Les feuilles tombent plus vite!"),
+                        ChatColor.translateAlternateColorCodes('&', "&c+1 Like!"),
+                        ChatColor.translateAlternateColorCodes('&', "&7Vitesse: &e" + currentTickSpeed),
                         5, 20, 5
                 );
             }
         }
 
-        // Programmer la fin du boost
-        boostTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (state == GameState.RUNNING) {
-                boosted = false;
-                setRandomTickSpeed(world, normalTickSpeed);
-                plugin.getLogger().info("Boost terminé - RandomTickSpeed revenu à " + normalTickSpeed);
-            }
-        }, boostDuration);
+        plugin.getLogger().info("Like! RandomTickSpeed augmenté à " + currentTickSpeed);
     }
 
     /**
@@ -349,16 +330,6 @@ public class FeuilleGame extends GameEvent implements Listener {
         world.setGameRule(GameRule.RANDOM_TICK_SPEED, speed);
     }
 
-    /**
-     * Remet le randomTickSpeed par défaut
-     */
-    private void resetRandomTickSpeed() {
-        World world = Bukkit.getWorld(worldName);
-        if (world != null) {
-            setRandomTickSpeed(world, defaultTickSpeed);
-            plugin.getLogger().info("RandomTickSpeed du monde '" + worldName + "' remis à " + defaultTickSpeed);
-        }
-    }
 
     /**
      * Régénère les feuilles dans toutes les régions WorldGuard configurées
@@ -434,29 +405,16 @@ public class FeuilleGame extends GameEvent implements Listener {
     }
 
     /**
-     * Vérifie si le boost est actif
+     * Récupère le tickspeed actuel
      */
-    public boolean isBoosted() {
-        return boosted;
+    public int getCurrentTickSpeed() {
+        return currentTickSpeed;
     }
 
     /**
-     * Annule la tâche de boost
-     */
-    private void cancelBoostTask() {
-        if (boostTask != null) {
-            boostTask.cancel();
-            boostTask = null;
-        }
-    }
-
-    /**
-     * Annule toutes les tâches planifiées (countdown, decay start, boost)
+     * Annule toutes les tâches planifiées (countdown, decay start)
      */
     private void cancelAllTasks() {
-        // Annuler le boost
-        cancelBoostTask();
-
         // Annuler la tâche de démarrage du decay
         if (decayStartTask != null) {
             decayStartTask.cancel();
