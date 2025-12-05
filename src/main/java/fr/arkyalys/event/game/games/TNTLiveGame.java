@@ -123,6 +123,17 @@ public class TNTLiveGame extends GameEvent implements Listener {
             subStuff = loadItemStacks(config, "tntlive.sub-stuff.inventory");
             subArmor = loadItemStacks(config, "tntlive.sub-stuff.armor");
         }
+
+        // Charger le streamer (persistant!)
+        if (config.contains("tntlive.streamer-uuid")) {
+            String uuidStr = config.getString("tntlive.streamer-uuid");
+            try {
+                streamerId = UUID.fromString(uuidStr);
+                plugin.getLogger().info("[TNTLive] Streamer charge: " + streamerId);
+            } catch (IllegalArgumentException e) {
+                plugin.getLogger().warning("[TNTLive] UUID streamer invalide: " + uuidStr);
+            }
+        }
     }
 
     @Override
