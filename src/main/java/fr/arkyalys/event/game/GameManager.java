@@ -340,7 +340,7 @@ public class GameManager implements Listener {
     }
 
     /**
-     * Bloque le PvP entre participants
+     * Bloque le PvP entre participants (sauf TNTLive)
      */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
@@ -348,6 +348,11 @@ public class GameManager implements Listener {
         if (!(event.getDamager() instanceof Player attacker)) return;
         // Vérifier si la victime est un joueur
         if (!(event.getEntity() instanceof Player victim)) return;
+
+        // TNTLive: PvP autorisé!
+        if (currentGame instanceof TNTLiveGame) {
+            return; // Ne pas bloquer
+        }
 
         // Si l'attaquant OU la victime est un participant protégé, bloquer
         if (isProtectedParticipant(attacker) || isProtectedParticipant(victim)) {
@@ -371,11 +376,16 @@ public class GameManager implements Listener {
     }
 
     /**
-     * Bloque le cassage de blocs pour les participants
+     * Bloque le cassage de blocs pour les participants (sauf TNTLive)
      */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
+
+        // TNTLive: cassage autorisé!
+        if (currentGame instanceof TNTLiveGame) {
+            return;
+        }
 
         if (isProtectedParticipant(player)) {
             event.setCancelled(true);
@@ -384,11 +394,16 @@ public class GameManager implements Listener {
     }
 
     /**
-     * Bloque le placement de blocs pour les participants
+     * Bloque le placement de blocs pour les participants (sauf TNTLive)
      */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockPlace(BlockPlaceEvent event) {
         Player player = event.getPlayer();
+
+        // TNTLive: placement autorisé!
+        if (currentGame instanceof TNTLiveGame) {
+            return;
+        }
 
         if (isProtectedParticipant(player)) {
             event.setCancelled(true);
