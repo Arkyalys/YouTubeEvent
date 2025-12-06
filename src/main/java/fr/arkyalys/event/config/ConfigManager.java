@@ -15,6 +15,7 @@ public class ConfigManager {
     // YouTube settings
     private String apiKey;
     private String channelId;
+    private String channelUsername;  // @username (ex: RayniseG)
     private int autoDetectInterval;
     private int pollInterval;
     private int maxMessagesPerPoll;
@@ -49,6 +50,7 @@ public class ConfigManager {
         // YouTube settings
         this.apiKey = config.getString("youtube.api-key", "YOUR_API_KEY_HERE");
         this.channelId = config.getString("youtube.channel-id", "");
+        this.channelUsername = config.getString("youtube.channel-username", "");  // @username (sans @)
         this.autoDetectInterval = config.getInt("youtube.auto-detect-interval", 30);
         this.pollInterval = config.getInt("youtube.poll-interval", 3);
         this.maxMessagesPerPoll = config.getInt("youtube.max-messages-per-poll", 200);
@@ -137,6 +139,17 @@ public class ConfigManager {
 
     public String getChannelId() {
         return channelId;
+    }
+
+    public String getChannelUsername() {
+        return channelUsername;
+    }
+
+    public void setChannelUsername(String username) {
+        // Enlever le @ si présent
+        this.channelUsername = username.startsWith("@") ? username.substring(1) : username;
+        plugin.getConfig().set("youtube.channel-username", this.channelUsername);
+        plugin.saveConfig();
     }
 
     public int getAutoDetectInterval() {

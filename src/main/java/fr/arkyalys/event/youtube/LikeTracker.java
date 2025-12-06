@@ -93,15 +93,15 @@ public class LikeTracker {
 
     /**
      * Vérifie les statistiques de la vidéo
-     * Utilise la méthode gratuite (scraping) en priorité
+     * Utilise l'API YouTube en priorité (plus précis), sinon scraping
      */
     private void checkStats() {
-        // Essayer d'abord la méthode gratuite
-        long[] stats = getStatsFree();
+        // Essayer d'abord l'API (plus précis pour les vues en temps réel)
+        long[] stats = getStatsAPI();
 
         if (stats == null) {
-            // Fallback sur l'API si la méthode gratuite échoue
-            stats = getStatsAPI();
+            // Fallback sur le scraping si l'API échoue
+            stats = getStatsFree();
         }
 
         if (stats == null) return;
@@ -161,9 +161,12 @@ public class LikeTracker {
         try {
             Request request = new Request.Builder()
                     .url(url)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                     .header("Accept-Language", "en-US,en;q=0.9")
-                    .header("Cookie", "CONSENT=YES+cb.20210420-15-p1.en-GB+FX+634")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    .header("Pragma", "no-cache")
+                    .header("Cookie", "CONSENT=YES+cb.20210420-15-p1.en-GB+FX+634; GPS=1")
                     .get()
                     .build();
 

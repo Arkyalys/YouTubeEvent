@@ -16,7 +16,7 @@ public class YouTubeLikeEvent extends YouTubeEvent implements Cancellable {
     private final long totalLikes;
 
     public YouTubeLikeEvent(String liveId, long newLikes, long totalLikes) {
-        super(liveId);
+        super(liveId, false); // Sync event (appelé depuis le main thread)
         this.newLikes = newLikes;
         this.totalLikes = totalLikes;
     }

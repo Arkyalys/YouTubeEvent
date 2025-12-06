@@ -11,6 +11,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -20,7 +21,11 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 
 import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.configuration.file.YamlConfiguration;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,12 +43,16 @@ public class GameManager implements Listener {
     private GameEvent currentGame = null;
     private Location returnSpawn = null; // Spawn de retour (leave/elimination)
     private final Set<UUID> disconnectedPlayers = new HashSet<>(); // Joueurs déco pendant un event
+    private boolean autoJoinNewPlayers = true; // TP auto les nouveaux joueurs à l'event
 
     public GameManager(YouTubeEventPlugin plugin) {
         this.plugin = plugin;
 
         // Enregistrer les listeners
         Bukkit.getPluginManager().registerEvents(this, plugin);
+
+        // Charger le spawn de retour depuis la config
+        loadReturnSpawn();
 
         // Enregistrer les jeux par défaut
         registerDefaultGames();
@@ -139,10 +148,11 @@ public class GameManager implements Listener {
      * Un joueur rejoint l'event en cours
      */
     public boolean joinGame(Player player) {
-        if (currentGame == null || currentGame.getState() != GameState.OPEN) {
+        if (currentGame == null) {
             return false;
         }
 
+        // La méthode join() gère elle-même les états autorisés
         return currentGame.join(player);
     }
 
@@ -198,14 +208,16 @@ public class GameManager implements Listener {
         for (int i = 0; i < newLikes; i++) {
             currentGame.handleYouTubeTrigger("like", "Viewer", String.valueOf(totalLikes));
 
-            // Actions spécifiques par event
+            // Feuille: boost le tick speed (mécanisme core, pas dans config)
             if (currentGame instanceof FeuilleGame feuilleGame) {
-                // Feuille: boost le tick speed
                 feuilleGame.triggerBoost();
-            } else if (currentGame instanceof TNTLiveGame tntLiveGame) {
-                // TNTLive: 1 flèche pour tous
-                tntLiveGame.giveLikeArrow();
             }
+            // TNTLive: les flèches sont gérées par la config (youtube-triggers.like)
+        }
+
+        // TNTLive: vérifier les milestones de likes (Mega TNT, Nuke, etc.)
+        if (currentGame instanceof TNTLiveGame tntLiveGame) {
+            tntLiveGame.checkLikeMilestones(totalLikes);
         }
     }
 
@@ -228,6 +240,11 @@ public class GameManager implements Listener {
             return;
         }
 
+        // TNTLive gère ses propres morts (subs respawn, streamer = fin)
+        if (currentGame instanceof TNTLiveGame) {
+            return;
+        }
+
         Player player = event.getEntity();
         if (currentGame.isParticipant(player)) {
             // Éliminer le joueur
@@ -239,10 +256,16 @@ public class GameManager implements Listener {
 
     /**
      * Force le respawn des participants au spawn de retour (pas dans l'arène)
+     * Note: TNTLive gère son propre respawn (subs respawn dans l'arène)
      */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         if (currentGame == null) {
+            return;
+        }
+
+        // TNTLive gère son propre respawn (subs restent dans l'arène)
+        if (currentGame instanceof TNTLiveGame) {
             return;
         }
 
@@ -280,7 +303,7 @@ public class GameManager implements Listener {
         }
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
 
@@ -295,6 +318,31 @@ public class GameManager implements Listener {
                 }
                 player.sendMessage("§6[Event] §7Vous avez été téléporté au spawn (déconnexion pendant l'event).");
             }, 5L);
+            return;
+        }
+
+        // Auto-join: Si un event est actif et l'option est activée, inscrire le joueur
+        // Pour TNTLive: fonctionne aussi en RUNNING (les subs peuvent rejoindre à tout moment)
+        if (autoJoinNewPlayers && hasActiveGame()) {
+            GameState gameState = currentGame.getState();
+            // Accepter OPEN pour tous les events, et RUNNING pour ceux qui le permettent (TNTLive)
+            if (gameState == GameState.OPEN || gameState == GameState.RUNNING) {
+                // Attendre quelques ticks pour laisser Essentials faire son spawn d'abord, puis override
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (currentGame != null &&
+                        (currentGame.getState() == GameState.OPEN || currentGame.getState() == GameState.RUNNING)) {
+                        // Vérifier si le joueur n'est pas déjà inscrit
+                        if (!currentGame.isParticipant(player)) {
+                            // Inscrire le joueur à l'event (ça le téléporte automatiquement)
+                            // La méthode join() vérifie elle-même si on peut rejoindre en RUNNING
+                            if (currentGame.join(player)) {
+                                player.sendMessage("§a§l[Event] §fVous avez été automatiquement inscrit à l'event §6" +
+                                    currentGame.getDisplayName() + "§f!");
+                            }
+                        }
+                    }
+                }, 10L); // 10 ticks = 0.5 sec, laisse le temps à Essentials de faire son travail
+            }
         }
     }
 
@@ -307,6 +355,9 @@ public class GameManager implements Listener {
             stopGame();
         }
 
+        // Recharger le spawn de retour
+        loadReturnSpawn();
+
         // Recharger les configs
         for (GameEvent game : registeredGames.values()) {
             game.loadConfig();
@@ -314,10 +365,11 @@ public class GameManager implements Listener {
     }
 
     /**
-     * Définit le spawn de retour (leave/elimination)
+     * Définit le spawn de retour (leave/elimination) et le sauvegarde
      */
     public void setReturnSpawn(Location location) {
         this.returnSpawn = location;
+        saveReturnSpawn();
     }
 
     /**
@@ -325,6 +377,101 @@ public class GameManager implements Listener {
      */
     public Location getReturnSpawn() {
         return returnSpawn;
+    }
+
+    /**
+     * Active/désactive l'auto-join des nouveaux joueurs
+     */
+    public void setAutoJoinNewPlayers(boolean enabled) {
+        this.autoJoinNewPlayers = enabled;
+        saveSettings();
+    }
+
+    /**
+     * Vérifie si l'auto-join est activé
+     */
+    public boolean isAutoJoinNewPlayers() {
+        return autoJoinNewPlayers;
+    }
+
+    /**
+     * Sauvegarde tous les paramètres dans spawns.yml
+     */
+    private void saveSettings() {
+        File spawnsFile = new File(plugin.getDataFolder(), "spawns.yml");
+        YamlConfiguration config = spawnsFile.exists() ? YamlConfiguration.loadConfiguration(spawnsFile) : new YamlConfiguration();
+
+        // Sauvegarder auto-join
+        config.set("settings.auto-join-new-players", autoJoinNewPlayers);
+
+        try {
+            config.save(spawnsFile);
+            plugin.getLogger().info("[GameManager] Paramètres sauvegardés!");
+        } catch (IOException e) {
+            plugin.getLogger().severe("[GameManager] Erreur sauvegarde paramètres: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Sauvegarde le spawn de retour dans spawns.yml
+     */
+    private void saveReturnSpawn() {
+        if (returnSpawn == null) return;
+
+        File spawnsFile = new File(plugin.getDataFolder(), "spawns.yml");
+        YamlConfiguration config = spawnsFile.exists() ? YamlConfiguration.loadConfiguration(spawnsFile) : new YamlConfiguration();
+
+        config.set("return-spawn.world", returnSpawn.getWorld().getName());
+        config.set("return-spawn.x", returnSpawn.getX());
+        config.set("return-spawn.y", returnSpawn.getY());
+        config.set("return-spawn.z", returnSpawn.getZ());
+        config.set("return-spawn.yaw", returnSpawn.getYaw());
+        config.set("return-spawn.pitch", returnSpawn.getPitch());
+
+        try {
+            config.save(spawnsFile);
+            plugin.getLogger().info("[GameManager] Spawn de retour sauvegardé!");
+        } catch (IOException e) {
+            plugin.getLogger().severe("[GameManager] Erreur sauvegarde spawn de retour: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Charge le spawn de retour et les paramètres depuis spawns.yml
+     */
+    private void loadReturnSpawn() {
+        File spawnsFile = new File(plugin.getDataFolder(), "spawns.yml");
+        if (!spawnsFile.exists()) {
+            plugin.getLogger().info("[GameManager] Aucune config de spawn trouvée, utilisation des valeurs par défaut.");
+            return;
+        }
+
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(spawnsFile);
+
+        // Charger les paramètres
+        this.autoJoinNewPlayers = config.getBoolean("settings.auto-join-new-players", true);
+        plugin.getLogger().info("[GameManager] Auto-join nouveaux joueurs: " + (autoJoinNewPlayers ? "activé" : "désactivé"));
+
+        // Charger le spawn de retour
+        if (!config.contains("return-spawn.world")) {
+            return;
+        }
+
+        String worldName = config.getString("return-spawn.world");
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) {
+            plugin.getLogger().warning("[GameManager] Monde du spawn de retour introuvable: " + worldName);
+            return;
+        }
+
+        double x = config.getDouble("return-spawn.x");
+        double y = config.getDouble("return-spawn.y");
+        double z = config.getDouble("return-spawn.z");
+        float yaw = (float) config.getDouble("return-spawn.yaw");
+        float pitch = (float) config.getDouble("return-spawn.pitch");
+
+        this.returnSpawn = new Location(world, x, y, z, yaw, pitch);
+        plugin.getLogger().info("[GameManager] Spawn de retour chargé: " + worldName + " " + x + ", " + y + ", " + z);
     }
 
     // ==================== Protections Event ====================
@@ -432,5 +579,32 @@ public class GameManager implements Listener {
         // Bloquer toutes les autres commandes
         event.setCancelled(true);
         player.sendMessage("§c§l[Event] §7Vous ne pouvez utiliser que §f/event leave §7pendant l'event!");
+    }
+
+    /**
+     * Bloque le spawn naturel de mobs dans les mondes des events
+     * Autorise: commandes, oeufs, spawners custom, plugins
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onCreatureSpawn(CreatureSpawnEvent event) {
+        String worldName = event.getLocation().getWorld().getName();
+
+        // Vérifier si c'est un monde d'event (feuille ou tntlive)
+        if (!worldName.equalsIgnoreCase("feuille") && !worldName.equalsIgnoreCase("tntlive")) {
+            return;
+        }
+
+        // Raisons de spawn autorisées
+        CreatureSpawnEvent.SpawnReason reason = event.getSpawnReason();
+        switch (reason) {
+            case COMMAND:           // /summon
+            case SPAWNER_EGG:       // Oeuf de spawn
+            case CUSTOM:            // Plugin custom
+            case SPAWNER:           // Spawner block (si voulu)
+            case DISPENSE_EGG:      // Dispenser avec oeuf
+                return; // Autorisé
+            default:
+                event.setCancelled(true); // Bloqué (NATURAL, CHUNK_GEN, etc.)
+        }
     }
 }

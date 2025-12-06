@@ -13,6 +13,8 @@ import fr.arkyalys.event.youtube.YouTubeAPI;
 import fr.arkyalys.event.youtube.LiveChatPoller;
 import fr.arkyalys.event.youtube.LiveAutoDetector;
 import fr.arkyalys.event.youtube.LikeTracker;
+import fr.arkyalys.event.placeholders.YouTubeEventExpansion;
+import fr.arkyalys.event.web.OverlayWebServer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -31,6 +33,7 @@ public class YouTubeEventPlugin extends JavaPlugin {
     private EventManager eventManager;
     private GameManager gameManager;
     private YouTubeDisplay display;
+    private OverlayWebServer webServer;
 
     // Le joueur cible des événements (le streamer)
     private UUID targetPlayer;
@@ -72,6 +75,20 @@ public class YouTubeEventPlugin extends JavaPlugin {
         // Initialiser l'API publique
         YouTubeEventAPI.init(this);
 
+        // Initialiser PlaceholderAPI si présent
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            new YouTubeEventExpansion(this).register();
+            getLogger().info("PlaceholderAPI detecte - placeholders enregistres!");
+        }
+
+        // Démarrer le serveur web pour les overlays OBS
+        this.webServer = new OverlayWebServer(this);
+        int webPort = getConfig().getInt("web-server.port", 8085);
+        boolean webEnabled = getConfig().getBoolean("web-server.enabled", true);
+        if (webEnabled) {
+            webServer.start(webPort);
+        }
+
         getLogger().info("========================================");
         getLogger().info("  YouTubeEvent v" + getDescription().getVersion());
         getLogger().info("  Plugin charge avec succes!");
@@ -79,6 +96,9 @@ public class YouTubeEventPlugin extends JavaPlugin {
         getLogger().info("  Provider: " + (configManager.isPreferInnerTube() ? "InnerTube (0 quota)" : "Data API v3"));
         getLogger().info("  Fallback: " + (configManager.isFallbackToDataAPI() ? "Actif" : "Desactive"));
         getLogger().info("  API: Disponible pour les autres plugins");
+        if (webEnabled) {
+            getLogger().info("  Overlays: http://localhost:" + webPort + "/");
+        }
         getLogger().info("========================================");
 
         // Vérifier la configuration
@@ -108,6 +128,11 @@ public class YouTubeEventPlugin extends JavaPlugin {
         // Arrêter le tracking des likes
         if (likeTracker != null) {
             likeTracker.stop();
+        }
+
+        // Arrêter le serveur web
+        if (webServer != null) {
+            webServer.stop();
         }
 
         getLogger().info("YouTubeEvent desactive.");
@@ -260,5 +285,9 @@ public class YouTubeEventPlugin extends JavaPlugin {
 
     public boolean isConnected() {
         return liveChatPoller != null && liveChatPoller.isRunning();
+    }
+
+    public OverlayWebServer getWebServer() {
+        return webServer;
     }
 }

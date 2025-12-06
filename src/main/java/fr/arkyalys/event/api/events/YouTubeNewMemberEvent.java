@@ -15,7 +15,7 @@ public class YouTubeNewMemberEvent extends YouTubeEvent implements Cancellable {
     private final ChatMessage message;
 
     public YouTubeNewMemberEvent(String liveId, ChatMessage message) {
-        super(liveId);
+        super(liveId, false); // Sync event
         this.message = message;
     }
 

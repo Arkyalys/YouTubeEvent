@@ -53,6 +53,11 @@ public class EventCommand implements CommandExecutor, TabCompleter {
             case "setstreamer" -> handleSetStreamer(sender, args);
             case "setstuff" -> handleSetStuff(sender, args);
             case "setorigin" -> handleSetOrigin(sender, args);
+            case "autojoin" -> handleAutoJoin(sender, args);
+            case "debug" -> handleDebug(sender, args);
+            case "debuginv" -> handleDebugInv(sender, args);
+            case "give" -> handleGive(sender, args);
+            case "effect" -> handleEffect(sender, args);
             case "help" -> sendHelp(sender);
             default -> {
                 sender.sendMessage((prefix + "&cCommande inconnue. Utilisez /event help").replace("&", "§"));
@@ -456,6 +461,41 @@ public class EventCommand implements CommandExecutor, TabCompleter {
     }
 
     /**
+     * /event autojoin [on|off]
+     * Active/désactive l'auto-join des nouveaux joueurs à l'event ouvert
+     */
+    private void handleAutoJoin(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        GameManager gameManager = plugin.getGameManager();
+
+        if (args.length < 2) {
+            // Afficher le statut actuel
+            boolean enabled = gameManager.isAutoJoinNewPlayers();
+            sender.sendMessage((prefix + "&7Auto-join nouveaux joueurs: " + (enabled ? "&aActivé" : "&cDésactivé")).replace("&", "§"));
+            sender.sendMessage((prefix + "&7Utilisez &f/event autojoin on|off &7pour changer.").replace("&", "§"));
+            return;
+        }
+
+        String action = args[1].toLowerCase();
+        boolean enable = action.equals("on") || action.equals("true") || action.equals("enable");
+        boolean disable = action.equals("off") || action.equals("false") || action.equals("disable");
+
+        if (!enable && !disable) {
+            sender.sendMessage((prefix + "&cUtilisation: /event autojoin <on|off>").replace("&", "§"));
+            return;
+        }
+
+        gameManager.setAutoJoinNewPlayers(enable);
+
+        if (enable) {
+            sender.sendMessage((prefix + "&aAuto-join activé! &7Les nouveaux joueurs seront automatiquement téléportés à l'event ouvert.").replace("&", "§"));
+        } else {
+            sender.sendMessage((prefix + "&cAuto-join désactivé. &7Les nouveaux joueurs devront utiliser /event join.").replace("&", "§"));
+        }
+    }
+
+    /**
      * /event status
      */
     private void handleStatus(CommandSender sender) {
@@ -493,6 +533,229 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage((prefix + "&aConfiguration des events rechargée!").replace("&", "§"));
     }
 
+    /**
+     * /event debug [joueur]
+     * Affiche les infos de debug pour TNTLive
+     */
+    private void handleDebug(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        GameManager gameManager = plugin.getGameManager();
+        GameEvent currentGame = gameManager.getCurrentGame();
+
+        sender.sendMessage("&6========== &eDEBUG TNTLive &6==========".replace("&", "§"));
+
+        if (currentGame == null) {
+            sender.sendMessage("&cAucun event en cours".replace("&", "§"));
+            return;
+        }
+
+        sender.sendMessage(("&7Event actif: &f" + currentGame.getName()).replace("&", "§"));
+        sender.sendMessage(("&7State: &f" + currentGame.getState()).replace("&", "§"));
+        sender.sendMessage(("&7Participants: &f" + currentGame.getParticipantCount()).replace("&", "§"));
+
+        if (!(currentGame instanceof TNTLiveGame tntLive)) {
+            sender.sendMessage("&cL'event actif n'est pas TNTLive".replace("&", "§"));
+            return;
+        }
+
+        // Info streamer
+        Player streamer = tntLive.getStreamer();
+        sender.sendMessage(("&7Streamer: &f" + (streamer != null ? streamer.getName() : "NON DÉFINI")).replace("&", "§"));
+
+        // Info subs
+        sender.sendMessage(("&7Subs dans subTeam: &f" + tntLive.getSubCount()).replace("&", "§"));
+
+        // Spawns
+        sender.sendMessage(("&7SubSpawn: &f" + (tntLive.getSubSpawn() != null ? locToStr(tntLive.getSubSpawn()) : "NULL")).replace("&", "§"));
+        sender.sendMessage(("&7StreamerSpawn: &f" + (tntLive.getStreamerSpawn() != null ? locToStr(tntLive.getStreamerSpawn()) : "NULL")).replace("&", "§"));
+
+        // Si un joueur est spécifié, afficher ses infos
+        if (args.length >= 2) {
+            Player target = Bukkit.getPlayer(args[1]);
+            if (target == null) {
+                sender.sendMessage(("&cJoueur introuvable: " + args[1]).replace("&", "§"));
+            } else {
+                sender.sendMessage("&6--- Info joueur: &f" + target.getName() + " &6---".replace("&", "§"));
+                sender.sendMessage(("&7UUID: &f" + target.getUniqueId()).replace("&", "§"));
+                sender.sendMessage(("&7Est participant: &f" + currentGame.isParticipant(target)).replace("&", "§"));
+                sender.sendMessage(("&7Est streamer: &f" + tntLive.isStreamer(target)).replace("&", "§"));
+                sender.sendMessage(("&7Est sub: &f" + tntLive.isSub(target)).replace("&", "§"));
+                sender.sendMessage(("&7GameMode: &f" + target.getGameMode()).replace("&", "§"));
+                sender.sendMessage(("&7Invulnerable: &f" + target.isInvulnerable()).replace("&", "§"));
+            }
+        } else {
+            sender.sendMessage("&7Utilisez &f/event debug <joueur> &7pour voir les infos d'un joueur".replace("&", "§"));
+        }
+
+        // Lister les participants
+        sender.sendMessage("&6--- Participants ---".replace("&", "§"));
+        for (java.util.UUID uuid : currentGame.getParticipants()) {
+            Player p = Bukkit.getPlayer(uuid);
+            String name = p != null ? p.getName() : uuid.toString();
+            boolean isSub = tntLive.isSub(p);
+            boolean isStreamer = tntLive.isStreamer(p);
+            String role = isStreamer ? "&6[STREAMER]" : (isSub ? "&c[SUB]" : "&7[?]");
+            sender.sendMessage((role + " &f" + name).replace("&", "§"));
+        }
+
+        sender.sendMessage("&6====================================".replace("&", "§"));
+    }
+
+    private String locToStr(org.bukkit.Location loc) {
+        return String.format("%.1f, %.1f, %.1f", loc.getX(), loc.getY(), loc.getZ());
+    }
+
+    /**
+     * /event debuginv <joueur>
+     * Force le reset de l'état d'un joueur (invulnérable, gamemode, etc.)
+     */
+    private void handleDebugInv(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        if (args.length < 2) {
+            sender.sendMessage((prefix + "&cUtilisation: /event debuginv <joueur>").replace("&", "§"));
+            return;
+        }
+
+        Player target = Bukkit.getPlayer(args[1]);
+        if (target == null) {
+            sender.sendMessage((prefix + "&cJoueur introuvable: " + args[1]).replace("&", "§"));
+            return;
+        }
+
+        // Afficher l'état AVANT
+        sender.sendMessage("&6========== &eRESET &f" + target.getName() + " &6==========".replace("&", "§"));
+        sender.sendMessage(("&7AVANT:").replace("&", "§"));
+        sender.sendMessage(("  &7Invulnerable: " + (target.isInvulnerable() ? "&cTRUE" : "&afalse")).replace("&", "§"));
+        sender.sendMessage(("  &7GameMode: &f" + target.getGameMode()).replace("&", "§"));
+        sender.sendMessage(("  &7AllowFlight: " + (target.getAllowFlight() ? "&cTRUE" : "&afalse")).replace("&", "§"));
+        sender.sendMessage(("  &7Flying: " + (target.isFlying() ? "&cTRUE" : "&afalse")).replace("&", "§"));
+
+        // FORCE RESET
+        target.setInvulnerable(false);
+        target.setGameMode(org.bukkit.GameMode.SURVIVAL);
+        target.setAllowFlight(false);
+        target.setFlying(false);
+        target.setFireTicks(0);
+        target.setFreezeTicks(0);
+        target.setHealth(target.getMaxHealth());
+        target.setFoodLevel(20);
+        target.setSaturation(20f);
+
+        // Enlever tous les effets de potion
+        for (org.bukkit.potion.PotionEffect effect : target.getActivePotionEffects()) {
+            target.removePotionEffect(effect.getType());
+        }
+
+        // Afficher l'état APRÈS
+        sender.sendMessage(("&7APRÈS:").replace("&", "§"));
+        sender.sendMessage(("  &7Invulnerable: " + (target.isInvulnerable() ? "&cTRUE" : "&afalse")).replace("&", "§"));
+        sender.sendMessage(("  &7GameMode: &f" + target.getGameMode()).replace("&", "§"));
+        sender.sendMessage(("  &7AllowFlight: " + (target.getAllowFlight() ? "&cTRUE" : "&afalse")).replace("&", "§"));
+        sender.sendMessage(("  &7Flying: " + (target.isFlying() ? "&cTRUE" : "&afalse")).replace("&", "§"));
+
+        sender.sendMessage(("&a✓ État de " + target.getName() + " réinitialisé!").replace("&", "§"));
+        target.sendMessage("§6[Event] §aVotre état a été réinitialisé par un admin.".replace("&", "§"));
+
+        sender.sendMessage("&6==========================================".replace("&", "§"));
+    }
+
+    /**
+     * /event give <team> <item> [amount]
+     * Donne un item à une équipe (streamer ou sub)
+     * Supporte les TNT custom: mega_tnt, nuke, mini_tnt
+     */
+    private void handleGive(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        if (args.length < 3) {
+            sender.sendMessage((prefix + "&cUtilisation: /event give <streamer|sub> <item> [quantité]").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Items spéciaux: mega_tnt, nuke, mini_tnt").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Exemple: /event give sub mega_tnt").replace("&", "§"));
+            return;
+        }
+
+        // Vérifier qu'un event TNTLive est actif
+        GameEvent currentGame = plugin.getGameManager().getCurrentGame();
+        if (!(currentGame instanceof TNTLiveGame tntLive)) {
+            sender.sendMessage((prefix + "&cCette commande nécessite un event TNTLive actif!").replace("&", "§"));
+            return;
+        }
+
+        String team = args[1].toLowerCase();
+        String itemName = args[2].toLowerCase();
+        int amount = 1;
+
+        if (args.length >= 4) {
+            try {
+                amount = Integer.parseInt(args[3]);
+            } catch (NumberFormatException e) {
+                sender.sendMessage((prefix + "&cQuantité invalide: " + args[3]).replace("&", "§"));
+                return;
+            }
+        }
+
+        if (!team.equals("streamer") && !team.equals("sub")) {
+            sender.sendMessage((prefix + "&cÉquipe invalide. Utilisez: streamer ou sub").replace("&", "§"));
+            return;
+        }
+
+        tntLive.giveTeamItem(team, itemName, amount);
+        sender.sendMessage((prefix + "&aItem &f" + itemName + " &ax" + amount + " &7donné à l'équipe &f" + team + "&7!").replace("&", "§"));
+    }
+
+    /**
+     * /event effect <team> <effect> <level> [duration]
+     * Donne un effet de potion à une équipe
+     */
+    private void handleEffect(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.event.admin")) return;
+
+        if (args.length < 4) {
+            sender.sendMessage((prefix + "&cUtilisation: /event effect <streamer|sub> <effet> <niveau> [durée_sec]").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Exemple: /event effect sub speed 2 60").replace("&", "§"));
+            sender.sendMessage((prefix + "&7Effets: speed, strength, regeneration, resistance, etc.").replace("&", "§"));
+            return;
+        }
+
+        // Vérifier qu'un event TNTLive est actif
+        GameEvent currentGame = plugin.getGameManager().getCurrentGame();
+        if (!(currentGame instanceof TNTLiveGame tntLive)) {
+            sender.sendMessage((prefix + "&cCette commande nécessite un event TNTLive actif!").replace("&", "§"));
+            return;
+        }
+
+        String team = args[1].toLowerCase();
+        String effectName = args[2].toLowerCase();
+        int level;
+        int duration = 60; // Par défaut 60 secondes
+
+        try {
+            level = Integer.parseInt(args[3]);
+        } catch (NumberFormatException e) {
+            sender.sendMessage((prefix + "&cNiveau invalide: " + args[3]).replace("&", "§"));
+            return;
+        }
+
+        if (args.length >= 5) {
+            try {
+                duration = Integer.parseInt(args[4]);
+            } catch (NumberFormatException e) {
+                sender.sendMessage((prefix + "&cDurée invalide: " + args[4]).replace("&", "§"));
+                return;
+            }
+        }
+
+        if (!team.equals("streamer") && !team.equals("sub")) {
+            sender.sendMessage((prefix + "&cÉquipe invalide. Utilisez: streamer ou sub").replace("&", "§"));
+            return;
+        }
+
+        tntLive.giveTeamEffect(team, effectName, level, duration);
+        sender.sendMessage((prefix + "&aEffet &f" + effectName + " " + level + " &7donné à l'équipe &f" + team + " &7pour " + duration + "s!").replace("&", "§"));
+    }
+
     private void sendHelp(CommandSender sender) {
         sender.sendMessage("&6========== &eCommandes Event &6==========".replace("&", "§"));
         sender.sendMessage("&e/event start <event> &7- Ouvrir un event".replace("&", "§"));
@@ -502,6 +765,7 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("&e/event join &7- Rejoindre l'event".replace("&", "§"));
         sender.sendMessage("&e/event leave &7- Quitter l'event".replace("&", "§"));
         sender.sendMessage("&e/event setspawn <event|spawn> &7- Définir le spawn".replace("&", "§"));
+        sender.sendMessage("&e/event autojoin [on|off] &7- Auto-TP nouveaux joueurs".replace("&", "§"));
         sender.sendMessage("&e/event reset <event> &7- Reset l'event".replace("&", "§"));
         sender.sendMessage("&e/event status &7- Voir le statut".replace("&", "§"));
         sender.sendMessage("&e/event reload &7- Recharger les configs".replace("&", "§"));
@@ -510,6 +774,8 @@ public class EventCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("&e/event setstuff tntlive <streamer|sub> &7- Sauver le stuff".replace("&", "§"));
         sender.sendMessage("&e/event setspawn tntlive <streamer|sub> &7- Spawns équipes".replace("&", "§"));
         sender.sendMessage("&e/event setorigin tntlive &7- Origine du schematic".replace("&", "§"));
+        sender.sendMessage("&e/event give <team> <item> [qté] &7- Donner item à équipe".replace("&", "§"));
+        sender.sendMessage("&e/event effect <team> <effet> <niv> [dur] &7- Effet à équipe".replace("&", "§"));
         sender.sendMessage("&6========================================".replace("&", "§"));
     }
 
@@ -540,7 +806,7 @@ public class EventCommand implements CommandExecutor, TabCompleter {
             // Commandes admin
             if (sender.hasPermission("youtubeevent.event.admin")) {
                 subCommands.addAll(Arrays.asList("start", "begin", "stop", "list", "setspawn", "reset", "reload",
-                        "setstreamer", "setstuff", "setorigin"));
+                        "setstreamer", "setstuff", "setorigin", "autojoin", "debug", "debuginv", "give", "effect"));
             }
 
             // Commandes joueur
@@ -574,6 +840,13 @@ public class EventCommand implements CommandExecutor, TabCompleter {
                         completions.add(game.getName());
                     }
                 }
+            } else if (subCommand.equals("autojoin")) {
+                // on/off pour autojoin
+                for (String option : Arrays.asList("on", "off")) {
+                    if (option.startsWith(current)) {
+                        completions.add(option);
+                    }
+                }
             } else if (subCommand.equals("setstreamer")) {
                 // Complétion des joueurs en ligne
                 for (Player player : Bukkit.getOnlinePlayers()) {
@@ -581,6 +854,10 @@ public class EventCommand implements CommandExecutor, TabCompleter {
                         completions.add(player.getName());
                     }
                 }
+            } else if (subCommand.equals("give") || subCommand.equals("effect")) {
+                // Équipe: streamer ou sub
+                if ("streamer".startsWith(current)) completions.add("streamer");
+                if ("sub".startsWith(current)) completions.add("sub");
             }
         } else if (args.length == 3) {
             String subCommand = args[0].toLowerCase();
@@ -591,6 +868,31 @@ public class EventCommand implements CommandExecutor, TabCompleter {
                 && args[1].equalsIgnoreCase("tntlive")) {
                 if ("streamer".startsWith(current)) completions.add("streamer");
                 if ("sub".startsWith(current)) completions.add("sub");
+            }
+            // give: items (TNT custom + quelques items utiles)
+            else if (subCommand.equals("give")) {
+                List<String> items = Arrays.asList("mega_tnt", "nuke", "mini_tnt", "tnt", "arrow", "diamond_sword", "bow");
+                for (String item : items) {
+                    if (item.startsWith(current)) completions.add(item);
+                }
+            }
+            // effect: effets de potion
+            else if (subCommand.equals("effect")) {
+                List<String> effects = Arrays.asList("speed", "strength", "regeneration", "resistance",
+                    "fire_resistance", "jump_boost", "invisibility", "slow", "weakness");
+                for (String effect : effects) {
+                    if (effect.startsWith(current)) completions.add(effect);
+                }
+            }
+        } else if (args.length == 4) {
+            String subCommand = args[0].toLowerCase();
+            // effect: niveau (1-5)
+            if (subCommand.equals("effect")) {
+                completions.addAll(Arrays.asList("1", "2", "3", "4", "5"));
+            }
+            // give: quantité (1-64)
+            else if (subCommand.equals("give")) {
+                completions.addAll(Arrays.asList("1", "5", "10", "16", "32", "64"));
             }
         }
 

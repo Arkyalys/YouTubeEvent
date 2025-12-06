@@ -35,6 +35,7 @@ public abstract class GameEvent {
     protected String displayName;
     protected List<String> winCommands = new ArrayList<>();
     protected List<String> participateCommands = new ArrayList<>();
+    protected String lastWinnerName = "";  // Pour le placeholder %winner%
 
     // YouTube triggers pour cet event
     protected Map<String, List<String>> youtubeTriggers = new HashMap<>();
@@ -275,7 +276,13 @@ public abstract class GameEvent {
      * Un joueur rejoint l'event
      */
     public boolean join(Player player) {
-        if (state != GameState.OPEN) {
+        // Vérifier si on peut rejoindre (OPEN, ou RUNNING si l'event le permet)
+        if (state == GameState.WAITING || state == GameState.ENDED) {
+            return false;
+        }
+        if (state == GameState.RUNNING && !canJoinWhileRunning()) {
+            player.sendMessage((plugin.getConfigManager().getPrefix() +
+                    "&cL'event a déjà commencé!").replace("&", "§"));
             return false;
         }
 
@@ -317,6 +324,14 @@ public abstract class GameEvent {
         Bukkit.broadcastMessage(message.replace("&", "§"));
 
         return true;
+    }
+
+    /**
+     * Indique si les joueurs peuvent rejoindre pendant que l'event est en cours (RUNNING)
+     * Par défaut: false. Override dans les sous-classes si nécessaire (ex: TNTLive)
+     */
+    protected boolean canJoinWhileRunning() {
+        return false;
     }
 
     /**
@@ -402,6 +417,7 @@ public abstract class GameEvent {
     public void win(Player winner) {
         DebugLogger.logGame(name, "win() appelé - winner: " + winner.getName());
         state = GameState.ENDED;
+        lastWinnerName = winner.getName();  // Stocker pour %winner%
 
         String message = plugin.getConfigManager().getPrefix() +
                 "&6&l" + winner.getName() + " &aa gagné l'event &6" + displayName + "&a!";
@@ -452,11 +468,13 @@ public abstract class GameEvent {
 
     /**
      * Exécute une liste de commandes pour un joueur
+     * Placeholders: %player%, %winner%, %uuid%, %event%, %display_name%, %all%
      */
     protected void executeCommands(List<String> commands, Player player) {
         for (String cmd : commands) {
             String finalCmd = cmd
                     .replace("%player%", player.getName())
+                    .replace("%winner%", lastWinnerName)
                     .replace("%uuid%", player.getUniqueId().toString())
                     .replace("%event%", name)
                     .replace("%display_name%", displayName);

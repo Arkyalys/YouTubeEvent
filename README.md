@@ -15,6 +15,9 @@ Plugin Minecraft Spigot/Paper qui connecte YouTube Live a votre serveur pour dec
   - Paliers de vues
   - Mots-cles specifiques
 - **Actions variees** : spawn mobs, give items, effets, commandes, broadcasts, sons, particules
+- **Modes de jeu integres** : TNTLive (Streamer vs Subs), Feuille (course de feuilles)
+- **Overlays OBS** : serveur web integre pour afficher les stats en temps reel
+- **PlaceholderAPI** : placeholders pour scoreboards et hologrammes
 - **API publique** pour integration avec d'autres plugins
 - **Evenements Bukkit** pour les developpeurs
 
@@ -499,6 +502,117 @@ Par defaut, InnerTube est utilise avec fallback automatique sur Data API si nece
 
 1. Aller sur [YouTube Settings](https://www.youtube.com/account_advanced)
 2. Copier l'ID de chaine (format: UCxxxxxxxxxxxxxxxxxx)
+
+---
+
+---
+
+# Mode de Jeu: TNTLive
+
+Mode de jeu ou le **Streamer** affronte les **Subs** dans une arene TNT!
+
+## Concept
+
+- **Streamer** (1 joueur) : Doit survivre le plus longtemps possible
+- **Subs** (tous les autres) : Doivent eliminer le streamer, respawn infini
+- **Likes YouTube** : Donnent des fleches aux subs
+- **TNT Aleatoire** : Les TNT normales peuvent se transformer en MEGA TNT ou NUKE!
+
+## Commandes Event
+
+| Commande | Description |
+|----------|-------------|
+| `/event open tntlive` | Ouvrir l'event (joueurs peuvent rejoindre) |
+| `/event start` | Lancer l'event |
+| `/event stop` | Arreter l'event |
+| `/event join` | Rejoindre l'event |
+| `/event leave` | Quitter l'event |
+| `/event setspawn tntlive <streamer\|sub>` | Definir les spawns |
+| `/event savestuff tntlive <streamer\|sub>` | Sauvegarder l'equipement |
+| `/event setstreamer <joueur>` | Definir le streamer |
+| `/event give <team> <item> [amount]` | Donner un item a une equipe |
+| `/event effect <team> <effect> <level> <duration>` | Donner un effet |
+
+## Configuration (events/tntlive.yml)
+
+Tout est configurable dans le fichier `events/tntlive.yml` :
+
+- **Messages** : Titres, broadcasts, notifications
+- **Sons** : Sons pour chaque evenement
+- **Delais** : Reset map, delai victoire
+- **TNT Custom** : Puissance MEGA/NUKE/MINI, chances de transformation
+- **Milestones** : Recompenses a 10/25/50/100 likes, buffs a 10/15/20 kills
+
+---
+
+# Overlays OBS (Serveur Web)
+
+Le plugin integre un serveur web pour afficher les stats en temps reel dans OBS.
+
+## Configuration
+
+```yaml
+# config.yml
+web-server:
+  enabled: true
+  port: 8085
+```
+
+## URLs Disponibles
+
+| URL | Description | Taille recommandee |
+|-----|-------------|-------------------|
+| `http://IP:8085/` | Page d'accueil | - |
+| `http://IP:8085/overlay/likes` | Compteur de likes anime | 400x150 |
+| `http://IP:8085/overlay/kills` | Compteur de kills | 400x150 |
+| `http://IP:8085/overlay/stats` | Toutes les stats | 400x350 |
+| `http://IP:8085/overlay/milestone` | Barre progression palier | 400x150 |
+| `http://IP:8085/overlay/participants` | Subs en vie | 400x150 |
+| `http://IP:8085/api/stats` | JSON brut | - |
+
+## Utilisation dans OBS
+
+1. Ajouter une source **Navigateur**
+2. URL : `http://IP_SERVEUR:8085/overlay/likes`
+3. Largeur : 400, Hauteur : 150
+4. Cocher "Actualiser le navigateur lorsque la scene devient active"
+
+---
+
+# PlaceholderAPI
+
+Le plugin ajoute des placeholders utilisables avec PlaceholderAPI.
+
+## Placeholders Disponibles
+
+| Placeholder | Description |
+|-------------|-------------|
+| `%youtubeevent_likes%` | Nombre de likes |
+| `%youtubeevent_likes_next%` | Prochain palier de likes |
+| `%youtubeevent_likes_remaining%` | Likes restants avant palier |
+| `%youtubeevent_likes_progress%` | Progression en % |
+| `%youtubeevent_kills%` | Kills du streamer |
+| `%youtubeevent_kills_next%` | Prochain palier de kills |
+| `%youtubeevent_kills_remaining%` | Kills restants avant palier |
+| `%youtubeevent_participants%` | Subs en vie |
+| `%youtubeevent_participants_total%` | Total de participants |
+| `%youtubeevent_participants_dead%` | Subs elimines |
+| `%youtubeevent_arrows_given%` | Fleches totales donnees |
+| `%youtubeevent_streamer%` | Nom du streamer |
+| `%youtubeevent_status%` | Statut (Inactif/Ouvert/En cours) |
+| `%youtubeevent_game%` | Nom du jeu actuel |
+
+## Exemple Scoreboard
+
+```yaml
+# Avec DecentHolograms ou autre plugin
+lines:
+  - "&c&lTNTLive"
+  - "&7Likes: &c%youtubeevent_likes%"
+  - "&7Prochain palier: &e%youtubeevent_likes_next%"
+  - "&7Kills: &6%youtubeevent_kills%"
+  - "&7Subs en vie: &a%youtubeevent_participants%"
+```
 
 ---
 

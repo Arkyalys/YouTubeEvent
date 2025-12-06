@@ -37,6 +37,7 @@ public class YouTubeCommand implements CommandExecutor, TabCompleter {
             case "status" -> handleStatus(sender);
             case "setkey" -> handleSetKey(sender, args);
             case "setchannel" -> handleSetChannel(sender, args);
+            case "setusername" -> handleSetUsername(sender, args);
             case "settarget" -> handleSetTarget(sender, args);
             case "auto" -> handleAuto(sender, args);
             case "reload" -> handleReload(sender);
@@ -122,6 +123,13 @@ public class YouTubeCommand implements CommandExecutor, TabCompleter {
                            ? "&cNon configuree" : "&aConfiguree";
         sender.sendMessage(("&7Cle API: " + apiStatus).replace("&", "\u00A7"));
 
+        // Afficher le channel username pour la detection
+        String username = plugin.getConfigManager().getChannelUsername();
+        sender.sendMessage(("&7@Username: " + (username.isEmpty() ? "&cNon configure" : "&a@" + username)).replace("&", "\u00A7"));
+
+        String channelId = plugin.getConfigManager().getChannelId();
+        sender.sendMessage(("&7Channel ID: " + (channelId.isEmpty() ? "&cNon configure" : "&f" + channelId)).replace("&", "\u00A7"));
+
         sender.sendMessage("&6==========================================".replace("&", "\u00A7"));
     }
 
@@ -158,6 +166,27 @@ public class YouTubeCommand implements CommandExecutor, TabCompleter {
         plugin.getConfigManager().setChannelId(channelId);
         sender.sendMessage(prefix + "&aChannel ID configure: &f" + channelId.replace("&", "\u00A7"));
         sender.sendMessage(prefix + "&7Utilisez &f/youtube auto start &7pour activer la detection automatique.".replace("&", "\u00A7"));
+    }
+
+    private void handleSetUsername(CommandSender sender, String[] args) {
+        if (!hasPermission(sender, "youtubeevent.admin")) return;
+
+        if (args.length < 2) {
+            sender.sendMessage(prefix + "&cUtilisation: /youtube setusername <@username>".replace("&", "\u00A7"));
+            sender.sendMessage(prefix + "&7Exemple: &f/youtube setusername RayniseG".replace("&", "\u00A7"));
+            sender.sendMessage(prefix + "&7(le @ est optionnel)".replace("&", "\u00A7"));
+            return;
+        }
+
+        String username = args[1];
+        // Enlever le @ si présent
+        if (username.startsWith("@")) {
+            username = username.substring(1);
+        }
+
+        plugin.getConfigManager().setChannelUsername(username);
+        sender.sendMessage(prefix + "&aUsername configure: &f@" + username.replace("&", "\u00A7"));
+        sender.sendMessage(prefix + "&7La detection automatique utilisera cette methode (plus fiable que l'API).".replace("&", "\u00A7"));
     }
 
     private void handleAuto(CommandSender sender, String[] args) {
@@ -368,7 +397,8 @@ public class YouTubeCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("&e/youtube stop &7- Arreter la connexion".replace("&", "\u00A7"));
         sender.sendMessage("&e/youtube status &7- Voir le statut".replace("&", "\u00A7"));
         sender.sendMessage("&e/youtube setkey <cle> &7- Definir la cle API".replace("&", "\u00A7"));
-        sender.sendMessage("&e/youtube setchannel <id> &7- Definir ta chaine".replace("&", "\u00A7"));
+        sender.sendMessage("&e/youtube setchannel <id> &7- Definir ta chaine (UCxxxx)".replace("&", "\u00A7"));
+        sender.sendMessage("&e/youtube setusername <@user> &7- Definir ton @username &a(recommande!)".replace("&", "\u00A7"));
         sender.sendMessage("&e/youtube auto [start|stop] &7- Detection auto".replace("&", "\u00A7"));
         sender.sendMessage("&e/youtube settarget [joueur] &7- Definir la cible".replace("&", "\u00A7"));
         sender.sendMessage("&e/youtube reload &7- Recharger la config".replace("&", "\u00A7"));
@@ -391,7 +421,7 @@ public class YouTubeCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            List<String> commands = Arrays.asList("start", "stop", "status", "setkey", "setchannel", "auto", "settarget", "reload", "test", "scoreboard", "help");
+            List<String> commands = Arrays.asList("start", "stop", "status", "setkey", "setchannel", "setusername", "auto", "settarget", "reload", "test", "scoreboard", "help");
             String current = args[0].toLowerCase();
             for (String cmd : commands) {
                 if (cmd.startsWith(current)) {

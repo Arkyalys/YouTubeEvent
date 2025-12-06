@@ -34,6 +34,7 @@ public class FeuilleGame extends GameEvent implements Listener {
     private int leafDecayStartDelay = 100; // Délai avant le début de la disparition (5 secondes)
     private int startTickSpeed = 3;        // Vitesse au début de l'event (après countdown)
     private int likeTickSpeedBonus = 1;    // Bonus de tickspeed par like (+1)
+    private int maxTickSpeed = 15;         // Vitesse maximum (cap)
     private List<String> regionNames;      // Régions WorldGuard pour régénérer (initialisé dans loadEventConfig)
     private Material leafMaterial;         // Type de feuille à régénérer (initialisé dans loadEventConfig)
 
@@ -98,6 +99,7 @@ public class FeuilleGame extends GameEvent implements Listener {
         leafDecayStartDelay = config.getInt("feuille.start-delay", 100);
         startTickSpeed = config.getInt("feuille.start-tick-speed", 3);
         likeTickSpeedBonus = config.getInt("feuille.like-tick-bonus", 1);
+        maxTickSpeed = config.getInt("feuille.max-tick-speed", 15);
 
         // Charger les régions (peut être une liste)
         // NOTE: Ne pas utiliser de field initializer car le constructeur parent
@@ -295,7 +297,7 @@ public class FeuilleGame extends GameEvent implements Listener {
 
     /**
      * Augmente le tickspeed de +1 (appelé par les likes YouTube)
-     * Les likes s'accumulent!
+     * Les likes s'accumulent jusqu'au max!
      */
     public void triggerBoost() {
         if (state != GameState.RUNNING) return;
@@ -303,24 +305,28 @@ public class FeuilleGame extends GameEvent implements Listener {
         World world = Bukkit.getWorld(worldName);
         if (world == null) return;
 
-        // Augmenter le tickspeed (permanent, pas temporaire!)
-        currentTickSpeed += likeTickSpeedBonus;
-        setRandomTickSpeed(world, currentTickSpeed);
+        // Augmenter le tickspeed (avec cap au max)
+        if (currentTickSpeed < maxTickSpeed) {
+            currentTickSpeed += likeTickSpeedBonus;
+            if (currentTickSpeed > maxTickSpeed) {
+                currentTickSpeed = maxTickSpeed;
+            }
+            setRandomTickSpeed(world, currentTickSpeed);
+        }
 
         // Effet visuel pour tous les participants
+        String speedText = currentTickSpeed >= maxTickSpeed ? "&c" + currentTickSpeed + " (MAX!)" : "&e" + currentTickSpeed;
         for (UUID uuid : participants) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f);
                 player.sendTitle(
                         ChatColor.translateAlternateColorCodes('&', "&c+1 Like!"),
-                        ChatColor.translateAlternateColorCodes('&', "&7Vitesse: &e" + currentTickSpeed),
+                        ChatColor.translateAlternateColorCodes('&', "&7Vitesse: " + speedText),
                         5, 20, 5
                 );
             }
         }
-
-        plugin.getLogger().info("Like! RandomTickSpeed augmenté à " + currentTickSpeed);
     }
 
     /**

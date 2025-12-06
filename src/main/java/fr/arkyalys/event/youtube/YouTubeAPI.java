@@ -158,18 +158,99 @@ public class YouTubeAPI {
      * Utilise d'abord la méthode gratuite (scraping), puis l'API en fallback
      */
     public String findActiveLive(String channelId) {
-        // Essayer d'abord la méthode gratuite (sans quota)
+        // 1. Essayer avec le @username si configuré (méthode la plus fiable)
+        String username = plugin.getConfigManager().getChannelUsername();
+        if (username != null && !username.isEmpty()) {
+            String liveId = findActiveLiveByUsername(username);
+            if (liveId != null) {
+                return liveId;
+            }
+        }
+
+        // 2. Essayer avec le channel ID (méthode /live)
         String liveId = findActiveLiveFree(channelId);
         if (liveId != null) {
             return liveId;
         }
 
-        // Fallback sur l'API si activée
+        // 3. Fallback sur l'API si activée
         if (fallbackToDataAPI) {
             return findActiveLiveAPI(channelId);
         }
 
         return null;
+    }
+
+    /**
+     * Méthode GRATUITE avec @username - Comme le bot Discord
+     * Vérifie si "text":"LIVE" est présent sur la page de la chaîne
+     */
+    private String findActiveLiveByUsername(String username) {
+        String url = "https://www.youtube.com/@" + username;
+
+        try {
+            Request request = new Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Cookie", "CONSENT=YES+cb.20210420-15-p1.en-GB+FX+634")
+                    .get()
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    return null;
+                }
+
+                String html = response.body().string();
+
+                // Méthode du bot Discord: chercher "text":"LIVE"
+                boolean isLive = html.contains("\"text\":\"LIVE\"");
+                if (!isLive) {
+                    return null;
+                }
+
+                // Extraire le videoId
+                // Méthode 1: Chercher dans le JSON
+                int videoIdStart = html.indexOf("\"videoId\":\"");
+                if (videoIdStart != -1) {
+                    int idStart = videoIdStart + 11;
+                    int idEnd = html.indexOf("\"", idStart);
+                    if (idEnd != -1 && idEnd - idStart == 11) {
+                        String videoId = html.substring(idStart, idEnd);
+                        plugin.getLogger().info("Live detecte via @" + username + ": " + videoId);
+                        return videoId;
+                    }
+                }
+
+                // Méthode 2: Chercher le canonical URL
+                int canonicalStart = html.indexOf("<link rel=\"canonical\"");
+                if (canonicalStart != -1) {
+                    int hrefStart = html.indexOf("href=\"", canonicalStart);
+                    if (hrefStart != -1) {
+                        int hrefEnd = html.indexOf("\"", hrefStart + 6);
+                        if (hrefEnd != -1) {
+                            String canonicalUrl = html.substring(hrefStart + 6, hrefEnd);
+                            if (canonicalUrl.contains("watch?v=")) {
+                                String videoId = canonicalUrl.substring(canonicalUrl.indexOf("watch?v=") + 8);
+                                if (videoId.contains("&")) {
+                                    videoId = videoId.substring(0, videoId.indexOf("&"));
+                                }
+                                plugin.getLogger().info("Live detecte via @" + username + " (canonical): " + videoId);
+                                return videoId;
+                            }
+                        }
+                    }
+                }
+
+                // On sait qu'il est live mais on n'a pas trouvé le videoId
+                plugin.getLogger().warning("Live detecte sur @" + username + " mais videoId introuvable");
+                return null;
+            }
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /**

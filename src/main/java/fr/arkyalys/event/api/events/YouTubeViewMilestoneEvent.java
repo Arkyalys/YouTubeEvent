@@ -16,7 +16,7 @@ public class YouTubeViewMilestoneEvent extends YouTubeEvent implements Cancellab
     private final int milestone;
 
     public YouTubeViewMilestoneEvent(String liveId, long viewCount, int milestone) {
-        super(liveId);
+        super(liveId, false); // Sync event
         this.viewCount = viewCount;
         this.milestone = milestone;
     }

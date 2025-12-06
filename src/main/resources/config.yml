@@ -17,6 +17,11 @@ youtube:
   # Format: UCxxxxxxxxxxxxxxxxxx (24 caracteres)
   channel-id: "UCjezM7oxQpcZmR542BfcmFw"
 
+  # @Username de votre chaine YouTube (RECOMMANDE pour la detection automatique!)
+  # C'est le nom dans l'URL: youtube.com/@RayniseG -> "RayniseG"
+  # Cette methode est plus fiable que le channel-id et ne consomme pas de quota API!
+  channel-username: "RayniseG"
+
   # Verifier automatiquement si la chaine est en live (en secondes, 0 = desactive)
   auto-detect-interval: 0
 
@@ -86,3 +91,24 @@ triggers:
 # %amount_value% - Valeur numerique du montant
 #
 # ============================================================
+
+# ============================================================
+#                     SERVEUR WEB (Overlays OBS)
+# ============================================================
+# Fournit des pages HTML pour afficher les stats en temps reel
+# a utiliser comme "Browser Source" dans OBS
+# ============================================================
+
+web-server:
+  # Activer le serveur web
+  enabled: true
+  # Port du serveur (assurez-vous qu'il est ouvert)
+  port: 8085
+
+# URLs disponibles:
+# /overlay/likes       - Compteur de likes
+# /overlay/kills       - Compteur de kills
+# /overlay/stats       - Toutes les stats
+# /overlay/milestone   - Prochain palier
+# /overlay/participants - Participants en vie
+# /api/stats           - JSON brut
